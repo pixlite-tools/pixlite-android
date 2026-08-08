@@ -56,6 +56,12 @@ jobs:
           sed -i 's/firebase_analytics: .*/firebase_analytics: ^11.6.0/g' pubspec.yaml
           flutter pub get
 
+      - name: Regenerate modern Android project
+        run: |
+          cd "$PROJECT_DIR"
+          rm -rf android
+          flutter create --platforms=android --org com.pixlite .
+
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
