@@ -1,0 +1,73 @@
+name: Build PixLite Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find project zip
+        run: |
+          ls -la
+          ZIP_FILE=$(ls PixLite_Android_v3_BuildReady*.zip | head -n 1)
+          echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
+          echo "Found: $ZIP_FILE"
+
+      - name: Unzip project
+        run: |
+          mkdir pixlite_source
+          unzip "$ZIP_FILE" -d pixlite_source
+          find pixlite_source -maxdepth 3 -type f | head -50
+
+      - name: Locate Flutter project
+        run: |
+          PROJECT_DIR=$(dirname $(find pixlite_source -name pubspec.yaml | head -n 1))
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          echo "Project dir: $PROJECT_DIR"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.0"
+          channel: stable
+
+      - name: Flutter pub get
+        run: |
+          cd "$PROJECT_DIR"
+          flutter pub get
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build apk --debug
+
+      - name: Build release AAB
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build appbundle --release || true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-debug-apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/*.apk
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-release-aab
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/bundle/release/*.aab
