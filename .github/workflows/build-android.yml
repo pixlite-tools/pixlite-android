@@ -66,6 +66,7 @@ jobs:
           from pathlib import Path
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text()
+
           if 'android.permission.INTERNET' not in text:
               text = text.replace(
                   '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
@@ -75,24 +76,39 @@ jobs:
                   '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n'
                   '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'
               )
+
           text = text.replace('android:label="pixlite"', 'android:label="PixLite"')
           text = text.replace('android:label="pixlite_android"', 'android:label="PixLite"')
+
           admob = '\n        <meta-data\n                      android:name="com.google.android.gms.ads.APPLICATION_ID"\n                      android:value="ca-app-pub-3940256099942544~3347511713"/>\n'
+
           if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
               text = text.replace('<activity', admob + '        <activity', 1)
+
           manifest.write_text(text)
           PY
 
       - name: Generate launcher icons
         run: |
           cd "$PROJECT_DIR"
+          python3 -m pip install pillow
           python3 - <<'PY'
           from pathlib import Path
           from PIL import Image
+
           src = Path("assets/pixlite_icon.png")
           im = Image.open(src).convert("RGBA")
-          sizes = {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}
+
+          sizes = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192
+          }
+
           base = Path("android/app/src/main/res")
+
           for folder, size in sizes.items():
               out = base / folder
               out.mkdir(parents=True, exist_ok=True)
