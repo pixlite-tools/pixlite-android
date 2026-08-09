@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,10 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find project zip
+      - name: Find PixLite v4 zip
         run: |
           ls -la
-          ZIP_FILE=$(ls PixLite_Android_v3_BuildReady*.zip | head -n 1)
+          ZIP_FILE=$(ls PixLite_Android_v4_CleanSource*.zip | head -n 1)
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
           echo "Found: $ZIP_FILE"
 
@@ -25,7 +28,7 @@ jobs:
         run: |
           mkdir pixlite_source
           unzip "$ZIP_FILE" -d pixlite_source
-          find pixlite_source -maxdepth 3 -type f | head -50
+          find pixlite_source -maxdepth 3 -type f | head -80
 
       - name: Locate Flutter project
         run: |
@@ -45,42 +48,41 @@ jobs:
           flutter-version: "3.38.0"
           channel: stable
 
-      - name: Patch pubspec and get dependencies
+      - name: Get Flutter dependencies
         run: |
           cd "$PROJECT_DIR"
-          sed -i 's/>=3.10.0 </>=3.10.0-0 </g' pubspec.yaml
-          sed -i 's/image_picker: .*/image_picker: ^1.1.2/g' pubspec.yaml
-          sed -i 's/image: .*/image: ^4.8.0/g' pubspec.yaml
-          sed -i 's/google_mobile_ads: .*/google_mobile_ads: ^7.0.0/g' pubspec.yaml
-          sed -i 's/firebase_core: .*/firebase_core: ^3.15.2/g' pubspec.yaml
-          sed -i 's/firebase_analytics: .*/firebase_analytics: ^11.6.0/g' pubspec.yaml
           flutter pub get
 
-      - name: Regenerate modern Android project
+      - name: Create Android project
         run: |
           cd "$PROJECT_DIR"
-          rm -rf android
           flutter create --platforms=android --org com.pixlite .
 
-      - name: Patch Android manifest for AdMob and permissions
+      - name: Patch Android manifest
         run: |
           cd "$PROJECT_DIR"
           python3 - <<'PY'
           from pathlib import Path
+
           path = Path("android/app/src/main/AndroidManifest.xml")
           text = path.read_text()
 
           if 'android.permission.INTERNET' not in text:
               text = text.replace(
                   '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\\n'
-                  '    <uses-permission android:name="android.permission.INTERNET"/>\\n'
-                  '    <uses-permission android:name="android.permission.CAMERA"/>'
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                  '    <uses-permission android:name="android.permission.INTERNET"/>\n'
+                  '    <uses-permission android:name="android.permission.CAMERA"/>\n'
+                  '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n'
+                  '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'
               )
 
-          admob = '''\\n        <meta-data
+          text = text.replace('android:label="pixlite"', 'android:label="PixLite"')
+          text = text.replace('android:label="pixlite_android"', 'android:label="PixLite"')
+
+          admob = '''\n        <meta-data
                       android:name="com.google.android.gms.ads.APPLICATION_ID"
-                      android:value="ca-app-pub-3940256099942544~3347511713"/>\\n'''
+                      android:value="ca-app-pub-3940256099942544~3347511713"/>\n'''
 
           if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
               text = text.replace('<activity', admob + '        <activity', 1)
@@ -98,14 +100,30 @@ jobs:
           cd "$PROJECT_DIR"
           flutter build appbundle --release || true
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixlite-debug-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/*.apk
+      - name: Prepare release files
+        run: |
+          mkdir release_files
+          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v4-debug.apk
+          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v4-release.aab || true
+          ls -la release_files
 
-      - name: Upload AAB
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-release-aab
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/bundle/release/*.aab
+          name: pixlite-v4-debug-apk
+          path: release_files/PixLite-v4-debug.apk
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-v4-release-aab
+          path: release_files/PixLite-v4-release.aab
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="pixlite-v4-test-${{ github.run_number }}-${{ github.run_attempt }}"
+          gh release create "$TAG" release_files/* \
+            --title "PixLite Android v4 Test ${{ github.run_number }}" \
+            --notes "PixLite v4 clean test build. Download PixLite-v4-debug.apk for Android testing."
