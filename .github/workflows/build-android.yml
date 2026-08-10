@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find PixLite v7 zip
+      - name: Find PixLite v8 zip
         run: |
           ls -la
-          ZIP_FILE=$(ls PixLite_Android_v7_FullScannerSource*.zip | head -n 1)
+          ZIP_FILE=$(ls PixLite_Android_v8_CunningScannerSource*.zip | head -n 1)
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
           echo "Found: $ZIP_FILE"
 
@@ -73,6 +73,7 @@ jobs:
                   '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
                   '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n'
                   '    <uses-permission android:name="android.permission.INTERNET"/>\n'
+                  '    <uses-permission android:name="android.permission.CAMERA"/>\n'
                   '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n'
                   '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'
               )
@@ -88,7 +89,7 @@ jobs:
           manifest.write_text(text)
           PY
 
-      - name: Patch Android SDK versions for ML Kit scanner
+      - name: Patch Android SDK versions
         run: |
           cd "$PROJECT_DIR"
           python3 - <<'PY'
@@ -128,23 +129,6 @@ jobs:
                   )
 
                   path.write_text(text)
-          PY
-
-      - name: Patch MLKit nullable images bug
-        run: |
-          cd "$PROJECT_DIR"
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("lib/main.dart")
-          text = path.read_text()
-
-          text = text.replace(
-              "final images = result.images;",
-              "final images = result.images ?? <String>[];"
-          )
-
-          path.write_text(text)
           PY
 
       - name: Generate launcher icons
@@ -187,27 +171,27 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release_files
-          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v7-fullscanner-debug.apk
-          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v7-fullscanner-release.aab || true
+          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v8-cunning-debug.apk
+          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v8-cunning-release.aab || true
           ls -la release_files
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v7-fullscanner-debug-apk
-          path: release_files/PixLite-v7-fullscanner-debug.apk
+          name: pixlite-v8-cunning-debug-apk
+          path: release_files/PixLite-v8-cunning-debug.apk
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v7-fullscanner-release-aab
-          path: release_files/PixLite-v7-fullscanner-release.aab
+          name: pixlite-v8-cunning-release-aab
+          path: release_files/PixLite-v8-cunning-release.aab
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="pixlite-v7-fullscanner-${{ github.run_number }}-${{ github.run_attempt }}"
+          TAG="pixlite-v8-cunning-${{ github.run_number }}-${{ github.run_attempt }}"
           gh release create "$TAG" release_files/* \
-            --title "PixLite Android v7 Full Scanner ${{ github.run_number }}" \
-            --notes "PixLite v7 with ML Kit full scanner mode. Download PixLite-v7-fullscanner-debug.apk for Android testing."
+            --title "PixLite Android v8 Cunning Scanner ${{ github.run_number }}" \
+            --notes "PixLite v8 with Cunning Document Scanner. Download PixLite-v8-cunning-debug.apk for Android testing."
