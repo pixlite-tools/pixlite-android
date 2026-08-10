@@ -89,7 +89,9 @@ jobs:
           text = text.replace("if(mat.isEmpty)", "if(mat.rows == 0 || mat.cols == 0)")
           text = text.replace("if (!mat.isEmpty)", "if (mat.rows != 0 && mat.cols != 0)")
           text = text.replace("if(!mat.isEmpty)", "if(mat.rows != 0 && mat.cols != 0)")
-          text = text.replace("activeColor:", "activeThumbColor:")
+
+          # Keep Slider activeColor. activeThumbColor is not accepted here.
+          text = text.replace("activeThumbColor:", "activeColor:")
 
           path.write_text(text)
           PY
