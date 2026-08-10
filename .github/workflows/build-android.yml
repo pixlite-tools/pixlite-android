@@ -1,10 +1,9 @@
-name: Build PixLite Android
+name: Build PixLite v11 Pro Scanner
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 permissions:
   contents: write
@@ -14,76 +13,79 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find PixLite v10 zip
+      - name: Find v11 source ZIP
         run: |
-          ls -la
-          ZIP_FILE=$(ls PixLite_Android_v10_PremiumNightSource*.zip | head -n 1)
+          ZIP_FILE=$(ls PixLite_Android_v11_ProScannerSource*.zip | head -n 1)
+          test -n "$ZIP_FILE"
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
-          echo "Found: $ZIP_FILE"
+          echo "Building: $ZIP_FILE"
 
-      - name: Unzip project
+      - name: Unzip source
         run: |
           rm -rf pixlite_source
           mkdir pixlite_source
           unzip "$ZIP_FILE" -d pixlite_source
-          find pixlite_source -maxdepth 3 -type f | head -120
-
-      - name: Locate Flutter project
-        run: |
           PROJECT_DIR=$(dirname $(find pixlite_source -name pubspec.yaml | head -n 1))
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-          echo "Project dir: $PROJECT_DIR"
 
-      - name: Set up Java
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Flutter
+      - name: Flutter 3.38
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.38.0"
           channel: stable
+          cache: true
 
-      - name: Get Flutter dependencies
+      - name: Flutter dependencies
         run: |
           cd "$PROJECT_DIR"
+          flutter --version
           flutter pub get
 
-      - name: Create Android project
+      - name: Create Android shell
         run: |
           cd "$PROJECT_DIR"
           flutter create --platforms=android --org com.pixlite .
 
-      - name: Patch Android manifest and app settings
+      - name: Configure Android
         run: |
           cd "$PROJECT_DIR"
+
           python3 - <<'PY'
           from pathlib import Path
 
-          manifest = Path("android/app/src/main/AndroidManifest.xml")
-          text = manifest.read_text()
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
 
-          if 'android.permission.INTERNET' not in text:
-              text = text.replace(
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n'
-                  '    <uses-permission android:name="android.permission.INTERNET"/>\n'
-                  '    <uses-permission android:name="android.permission.CAMERA"/>\n'
-                  '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n'
-                  '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'
+          head = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+
+          perms = '''
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.CAMERA"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+          '''
+
+          if 'android.permission.INTERNET' not in s:
+              s = s.replace(
+                  head,
+                  head + perms
               )
 
-          text = text.replace(
+          s = s.replace(
               'android:label="pixlite"',
               'android:label="PixLite"'
           )
 
-          text = text.replace(
+          s = s.replace(
               'android:label="pixlite_android"',
               'android:label="PixLite"'
           )
@@ -94,139 +96,110 @@ jobs:
                       android:value="ca-app-pub-3940256099942544~3347511713"/>
           '''
 
-          if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
-              text = text.replace(
+          if 'com.google.android.gms.ads.APPLICATION_ID' not in s:
+              s = s.replace(
                   '<activity',
-                  admob + '\n        <activity',
+                  admob + '        <activity',
                   1
               )
 
-          manifest.write_text(text)
-          PY
-
-      - name: Patch Android SDK versions
-        run: |
-          cd "$PROJECT_DIR"
-          python3 - <<'PY'
-          from pathlib import Path
+          manifest.write_text(s)
 
           for path in [
-              Path("android/app/build.gradle.kts"),
-              Path("android/app/build.gradle")
+              Path('android/app/build.gradle.kts'),
+              Path('android/app/build.gradle')
           ]:
-              if path.exists():
-                  text = path.read_text()
+              if not path.exists():
+                  continue
 
-                  text = text.replace(
-                      "compileSdk = flutter.compileSdkVersion",
-                      "compileSdk = 36"
-                  )
+              x = path.read_text()
 
-                  text = text.replace(
-                      "targetSdk = flutter.targetSdkVersion",
-                      "targetSdk = 36"
-                  )
+              x = x.replace(
+                  'compileSdk = flutter.compileSdkVersion',
+                  'compileSdk = 36'
+              )
 
-                  text = text.replace(
-                      "minSdk = flutter.minSdkVersion",
-                      "minSdk = 21"
-                  )
+              x = x.replace(
+                  'targetSdk = flutter.targetSdkVersion',
+                  'targetSdk = 36'
+              )
 
-                  text = text.replace(
-                      "compileSdkVersion flutter.compileSdkVersion",
-                      "compileSdkVersion 36"
-                  )
+              x = x.replace(
+                  'minSdk = flutter.minSdkVersion',
+                  'minSdk = 21'
+              )
 
-                  text = text.replace(
-                      "targetSdkVersion flutter.targetSdkVersion",
-                      "targetSdkVersion 36"
-                  )
+              x = x.replace(
+                  'compileSdkVersion flutter.compileSdkVersion',
+                  'compileSdkVersion 36'
+              )
 
-                  text = text.replace(
-                      "minSdkVersion flutter.minSdkVersion",
-                      "minSdkVersion 21"
-                  )
+              x = x.replace(
+                  'targetSdkVersion flutter.targetSdkVersion',
+                  'targetSdkVersion 36'
+              )
 
-                  path.write_text(text)
+              x = x.replace(
+                  'minSdkVersion flutter.minSdkVersion',
+                  'minSdkVersion 21'
+              )
+
+              path.write_text(x)
           PY
 
-      - name: Generate launcher icons
+      - name: Generate launcher icon
         run: |
           cd "$PROJECT_DIR"
+
           python3 -m pip install pillow
 
           python3 - <<'PY'
           from pathlib import Path
           from PIL import Image
 
-          src = Path("assets/pixlite_icon.png")
-          im = Image.open(src).convert("RGBA")
+          src = Path('assets/pixlite_icon.png')
+          im = Image.open(src).convert('RGBA')
 
           sizes = {
-              "mipmap-mdpi": 48,
-              "mipmap-hdpi": 72,
-              "mipmap-xhdpi": 96,
-              "mipmap-xxhdpi": 144,
-              "mipmap-xxxhdpi": 192
+              'mipmap-mdpi': 48,
+              'mipmap-hdpi': 72,
+              'mipmap-xhdpi': 96,
+              'mipmap-xxhdpi': 144,
+              'mipmap-xxxhdpi': 192
           }
 
-          base = Path("android/app/src/main/res")
+          base = Path('android/app/src/main/res')
 
           for folder, size in sizes.items():
-              out = base / folder
-              out.mkdir(parents=True, exist_ok=True)
+              d = base / folder
+              d.mkdir(parents=True, exist_ok=True)
 
               im.resize(
                   (size, size),
                   Image.LANCZOS
-              ).save(out / "ic_launcher.png")
+              ).save(d / 'ic_launcher.png')
           PY
 
-      - name: Build debug APK
+      - name: Analyze source
+        run: |
+          cd "$PROJECT_DIR"
+          flutter analyze --no-fatal-infos
+
+      - name: Build v11 debug APK
         run: |
           cd "$PROJECT_DIR"
           flutter build apk --debug
 
-      - name: Build release AAB
-        run: |
-          cd "$PROJECT_DIR"
-          flutter build appbundle --release || true
-
-      - name: Prepare release files
+      - name: Prepare artifact
         run: |
           mkdir -p release_files
 
           cp \
-            "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk \
-            release_files/PixLite-v10-premium-night-debug.apk
+            "$PROJECT_DIR"/build/app/outputs/flutter-apk/app-debug.apk \
+            release_files/PixLite-v11-pro-scanner-debug.apk
 
-          cp \
-            "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab \
-            release_files/PixLite-v10-premium-night-release.aab \
-            || true
-
-          ls -la release_files
-
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v10-premium-night-debug-apk
-          path: release_files/PixLite-v10-premium-night-debug.apk
-
-      - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixlite-v10-premium-night-release-aab
-          path: release_files/PixLite-v10-premium-night-release.aab
-          if-no-files-found: ignore
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-        run: |
-          TAG="pixlite-v10-${{ github.run_number }}-${{ github.run_attempt }}"
-
-          gh release create "$TAG" release_files/* \
-            --title "PixLite v10 Premium Night ${{ github.run_number }}" \
-            --notes "PixLite v10 Premium Night: new premium dark UI, working scanner, quality tools, files/settings and three Home ad placements."
+          name: pixlite-v11-pro-scanner-debug-apk
+          path: release_files/PixLite-v11-pro-scanner-debug.apk
