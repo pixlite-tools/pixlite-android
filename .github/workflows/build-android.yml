@@ -1,4 +1,4 @@
-name: Build PixLite v11 Pro Scanner
+name: name: Build PixLite v11 Pro Scanner Fixed
 
 on:
   workflow_dispatch:
