@@ -130,6 +130,23 @@ jobs:
                   path.write_text(text)
           PY
 
+      - name: Patch MLKit nullable images bug
+        run: |
+          cd "$PROJECT_DIR"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/main.dart")
+          text = path.read_text()
+
+          text = text.replace(
+              "final images = result.images;",
+              "final images = result.images ?? <String>[];"
+          )
+
+          path.write_text(text)
+          PY
+
       - name: Generate launcher icons
         run: |
           cd "$PROJECT_DIR"
