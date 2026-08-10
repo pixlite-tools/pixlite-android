@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find PixLite v6 zip
+      - name: Find PixLite v7 zip
         run: |
           ls -la
-          ZIP_FILE=$(ls PixLite_Android_v6_MLKitScannerSource*.zip | head -n 1)
+          ZIP_FILE=$(ls PixLite_Android_v7_FullScannerSource*.zip | head -n 1)
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
           echo "Found: $ZIP_FILE"
 
@@ -187,27 +187,27 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release_files
-          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v6-mlkit-debug.apk
-          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v6-mlkit-release.aab || true
+          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v7-fullscanner-debug.apk
+          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v7-fullscanner-release.aab || true
           ls -la release_files
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v6-mlkit-debug-apk
-          path: release_files/PixLite-v6-mlkit-debug.apk
+          name: pixlite-v7-fullscanner-debug-apk
+          path: release_files/PixLite-v7-fullscanner-debug.apk
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v6-mlkit-release-aab
-          path: release_files/PixLite-v6-mlkit-release.aab
+          name: pixlite-v7-fullscanner-release-aab
+          path: release_files/PixLite-v7-fullscanner-release.aab
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="pixlite-v6-mlkit-${{ github.run_number }}-${{ github.run_attempt }}"
+          TAG="pixlite-v7-fullscanner-${{ github.run_number }}-${{ github.run_attempt }}"
           gh release create "$TAG" release_files/* \
-            --title "PixLite Android v6 MLKit Scanner ${{ github.run_number }}" \
-            --notes "PixLite v6 with real ML Kit document scanner. Download PixLite-v6-mlkit-debug.apk for Android testing."
+            --title "PixLite Android v7 Full Scanner ${{ github.run_number }}" \
+            --notes "PixLite v7 with ML Kit full scanner mode. Download PixLite-v7-fullscanner-debug.apk for Android testing."
