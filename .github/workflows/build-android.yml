@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find PixLite v5 zip
+      - name: Find PixLite Scan Fixed zip
         run: |
           ls -la
-          ZIP_FILE=$(ls PixLite_Android_v5_PremiumSource*.zip | head -n 1)
+          ZIP_FILE=$(ls *SCAN_FIXED*.zip | head -n 1)
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
           echo "Found: $ZIP_FILE"
 
@@ -64,6 +64,7 @@ jobs:
           cd "$PROJECT_DIR"
           python3 - <<'PY'
           from pathlib import Path
+
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text()
 
@@ -128,27 +129,27 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release_files
-          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v5-debug.apk
-          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v5-release.aab || true
+          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v5-scanfix-debug.apk
+          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v5-scanfix-release.aab || true
           ls -la release_files
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v5-debug-apk
-          path: release_files/PixLite-v5-debug.apk
+          name: pixlite-v5-scanfix-debug-apk
+          path: release_files/PixLite-v5-scanfix-debug.apk
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v5-release-aab
-          path: release_files/PixLite-v5-release.aab
+          name: pixlite-v5-scanfix-release-aab
+          path: release_files/PixLite-v5-scanfix-release.aab
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="pixlite-v5-test-${{ github.run_number }}-${{ github.run_attempt }}"
+          TAG="pixlite-v5-scanfix-${{ github.run_number }}-${{ github.run_attempt }}"
           gh release create "$TAG" release_files/* \
-            --title "PixLite Android v5 Test ${{ github.run_number }}" \
-            --notes "PixLite v5 premium test build. Download PixLite-v5-debug.apk for Android testing."
+            --title "PixLite Android v5 ScanFix ${{ github.run_number }}" \
+            --notes "PixLite v5 ScanFix test build. Download PixLite-v5-scanfix-debug.apk for Android testing."
