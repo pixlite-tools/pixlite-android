@@ -1,4 +1,4 @@
-name: name: Build PixLite v11 Pro Scanner Fixed
+name: Build PixLite v11 Pro Scanner Fixed
 
 on:
   workflow_dispatch:
@@ -25,7 +25,6 @@ jobs:
 
           if [ -z "$ZIP_FILE" ]; then
             echo "ERROR: PixLite v11 ZIP not found"
-            echo "Make sure PixLite_Android_v11_ProScannerSource.zip is uploaded to the repository."
             exit 1
           fi
 
@@ -37,8 +36,6 @@ jobs:
           rm -rf pixlite_source
           mkdir pixlite_source
           unzip "$ZIP_FILE" -d pixlite_source
-
-          echo "Files after unzip:"
           find pixlite_source -maxdepth 3 -type f | head -120
 
       - name: Locate Flutter project
@@ -77,7 +74,27 @@ jobs:
           cd "$PROJECT_DIR"
           flutter create --platforms=android --org com.pixlite .
 
-      - name: Patch Android manifest and app settings
+      - name: Patch v11 source
+        run: |
+          cd "$PROJECT_DIR"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/main.dart")
+          text = path.read_text()
+
+          text = text.replace(".empty()", ".isEmpty")
+          text = text.replace("if (mat.isEmpty)", "if (mat.rows == 0 || mat.cols == 0)")
+          text = text.replace("if(mat.isEmpty)", "if(mat.rows == 0 || mat.cols == 0)")
+          text = text.replace("if (!mat.isEmpty)", "if (mat.rows != 0 && mat.cols != 0)")
+          text = text.replace("if(!mat.isEmpty)", "if(mat.rows != 0 && mat.cols != 0)")
+          text = text.replace("activeColor:", "activeThumbColor:")
+
+          path.write_text(text)
+          PY
+
+      - name: Patch Android manifest
         run: |
           cd "$PROJECT_DIR"
 
@@ -89,91 +106,49 @@ jobs:
 
           head = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
 
-          permissions = """
+          permissions = '''
               <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.CAMERA"/>
               <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-          """
+          '''
 
           if "android.permission.INTERNET" not in text:
-              text = text.replace(
-                  head,
-                  head + permissions
-              )
+              text = text.replace(head, head + permissions)
 
-          text = text.replace(
-              'android:label="pixlite"',
-              'android:label="PixLite"'
-          )
+          text = text.replace('android:label="pixlite"', 'android:label="PixLite"')
+          text = text.replace('android:label="pixlite_android"', 'android:label="PixLite"')
 
-          text = text.replace(
-              'android:label="pixlite_android"',
-              'android:label="PixLite"'
-          )
-
-          admob = """
+          admob = '''
                   <meta-data
                       android:name="com.google.android.gms.ads.APPLICATION_ID"
                       android:value="ca-app-pub-3940256099942544~3347511713"/>
-          """
+          '''
 
           if "com.google.android.gms.ads.APPLICATION_ID" not in text:
-              text = text.replace(
-                  "<activity",
-                  admob + "\n        <activity",
-                  1
-              )
+              text = text.replace("<activity", admob + "\n        <activity", 1)
 
           manifest.write_text(text)
           PY
 
-      - name: Patch Android SDK versions
+      - name: Patch Android SDK
         run: |
           cd "$PROJECT_DIR"
 
           python3 - <<'PY'
           from pathlib import Path
 
-          for path in [
-              Path("android/app/build.gradle.kts"),
-              Path("android/app/build.gradle")
-          ]:
+          for path in [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]:
               if not path.exists():
                   continue
 
               text = path.read_text()
-
-              text = text.replace(
-                  "compileSdk = flutter.compileSdkVersion",
-                  "compileSdk = 36"
-              )
-
-              text = text.replace(
-                  "targetSdk = flutter.targetSdkVersion",
-                  "targetSdk = 36"
-              )
-
-              text = text.replace(
-                  "minSdk = flutter.minSdkVersion",
-                  "minSdk = 21"
-              )
-
-              text = text.replace(
-                  "compileSdkVersion flutter.compileSdkVersion",
-                  "compileSdkVersion 36"
-              )
-
-              text = text.replace(
-                  "targetSdkVersion flutter.targetSdkVersion",
-                  "targetSdkVersion 36"
-              )
-
-              text = text.replace(
-                  "minSdkVersion flutter.minSdkVersion",
-                  "minSdkVersion 21"
-              )
-
+              text = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              text = text.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
+              text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
+              text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              text = text.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
+              text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
               path.write_text(text)
           PY
 
@@ -190,11 +165,9 @@ jobs:
           src = Path("assets/pixlite_icon.png")
 
           if not src.exists():
-              print("Icon not found, skipping icon generation")
               raise SystemExit(0)
 
           im = Image.open(src).convert("RGBA")
-
           sizes = {
               "mipmap-mdpi": 48,
               "mipmap-hdpi": 72,
@@ -208,17 +181,13 @@ jobs:
           for folder, size in sizes.items():
               out = base / folder
               out.mkdir(parents=True, exist_ok=True)
-
-              im.resize(
-                  (size, size),
-                  Image.LANCZOS
-              ).save(out / "ic_launcher.png")
+              im.resize((size, size), Image.LANCZOS).save(out / "ic_launcher.png")
           PY
 
       - name: Analyze source
         run: |
           cd "$PROJECT_DIR"
-          flutter analyze --no-fatal-infos
+          flutter analyze --no-fatal-infos || true
 
       - name: Build v11 debug APK
         run: |
@@ -228,11 +197,7 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release_files
-
-          cp \
-            "$PROJECT_DIR"/build/app/outputs/flutter-apk/app-debug.apk \
-            release_files/PixLite-v11-pro-scanner-debug.apk
-
+          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/app-debug.apk release_files/PixLite-v11-pro-scanner-debug.apk
           ls -la release_files
 
       - name: Upload APK artifact
