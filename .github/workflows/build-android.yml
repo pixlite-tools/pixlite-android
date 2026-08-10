@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find PixLite Scan Fixed zip
+      - name: Find PixLite v6 zip
         run: |
           ls -la
-          ZIP_FILE=$(ls *SCAN_FIXED*.zip | head -n 1)
+          ZIP_FILE=$(ls PixLite_Android_v6_MLKitScannerSource*.zip | head -n 1)
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
           echo "Found: $ZIP_FILE"
 
@@ -73,7 +73,6 @@ jobs:
                   '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
                   '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n'
                   '    <uses-permission android:name="android.permission.INTERNET"/>\n'
-                  '    <uses-permission android:name="android.permission.CAMERA"/>\n'
                   '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n'
                   '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'
               )
@@ -87,6 +86,27 @@ jobs:
               text = text.replace('<activity', admob + '        <activity', 1)
 
           manifest.write_text(text)
+          PY
+
+      - name: Patch Android SDK versions for ML Kit scanner
+        run: |
+          cd "$PROJECT_DIR"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for path in [
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle")
+          ]:
+              if path.exists():
+                  text = path.read_text()
+                  text = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 35")
+                  text = text.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 35")
+                  text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
+                  text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 35")
+                  text = text.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 35")
+                  text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+                  path.write_text(text)
           PY
 
       - name: Generate launcher icons
@@ -129,27 +149,27 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release_files
-          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v5-scanfix-debug.apk
-          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v5-scanfix-release.aab || true
+          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v6-mlkit-debug.apk
+          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v6-mlkit-release.aab || true
           ls -la release_files
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v5-scanfix-debug-apk
-          path: release_files/PixLite-v5-scanfix-debug.apk
+          name: pixlite-v6-mlkit-debug-apk
+          path: release_files/PixLite-v6-mlkit-debug.apk
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v5-scanfix-release-aab
-          path: release_files/PixLite-v5-scanfix-release.aab
+          name: pixlite-v6-mlkit-release-aab
+          path: release_files/PixLite-v6-mlkit-release.aab
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="pixlite-v5-scanfix-${{ github.run_number }}-${{ github.run_attempt }}"
+          TAG="pixlite-v6-mlkit-${{ github.run_number }}-${{ github.run_attempt }}"
           gh release create "$TAG" release_files/* \
-            --title "PixLite Android v5 ScanFix ${{ github.run_number }}" \
-            --notes "PixLite v5 ScanFix test build. Download PixLite-v5-scanfix-debug.apk for Android testing."
+            --title "PixLite Android v6 MLKit Scanner ${{ github.run_number }}" \
+            --notes "PixLite v6 with real ML Kit document scanner. Download PixLite-v6-mlkit-debug.apk for Android testing."
