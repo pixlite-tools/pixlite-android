@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find PixLite v8 zip
+      - name: Find PixLite v10 zip
         run: |
           ls -la
-          ZIP_FILE=$(ls PixLite_Android_v8_CunningScannerSource*.zip | head -n 1)
+          ZIP_FILE=$(ls PixLite_Android_v10_PremiumNightSource*.zip | head -n 1)
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
           echo "Found: $ZIP_FILE"
 
@@ -78,13 +78,28 @@ jobs:
                   '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'
               )
 
-          text = text.replace('android:label="pixlite"', 'android:label="PixLite"')
-          text = text.replace('android:label="pixlite_android"', 'android:label="PixLite"')
+          text = text.replace(
+              'android:label="pixlite"',
+              'android:label="PixLite"'
+          )
 
-          admob = '\n        <meta-data\n                      android:name="com.google.android.gms.ads.APPLICATION_ID"\n                      android:value="ca-app-pub-3940256099942544~3347511713"/>\n'
+          text = text.replace(
+              'android:label="pixlite_android"',
+              'android:label="PixLite"'
+          )
+
+          admob = '''
+                  <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="ca-app-pub-3940256099942544~3347511713"/>
+          '''
 
           if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
-              text = text.replace('<activity', admob + '        <activity', 1)
+              text = text.replace(
+                  '<activity',
+                  admob + '\n        <activity',
+                  1
+              )
 
           manifest.write_text(text)
           PY
@@ -106,10 +121,12 @@ jobs:
                       "compileSdk = flutter.compileSdkVersion",
                       "compileSdk = 36"
                   )
+
                   text = text.replace(
                       "targetSdk = flutter.targetSdkVersion",
                       "targetSdk = 36"
                   )
+
                   text = text.replace(
                       "minSdk = flutter.minSdkVersion",
                       "minSdk = 21"
@@ -119,10 +136,12 @@ jobs:
                       "compileSdkVersion flutter.compileSdkVersion",
                       "compileSdkVersion 36"
                   )
+
                   text = text.replace(
                       "targetSdkVersion flutter.targetSdkVersion",
                       "targetSdkVersion 36"
                   )
+
                   text = text.replace(
                       "minSdkVersion flutter.minSdkVersion",
                       "minSdkVersion 21"
@@ -135,6 +154,7 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
           python3 -m pip install pillow
+
           python3 - <<'PY'
           from pathlib import Path
           from PIL import Image
@@ -155,7 +175,11 @@ jobs:
           for folder, size in sizes.items():
               out = base / folder
               out.mkdir(parents=True, exist_ok=True)
-              im.resize((size, size), Image.LANCZOS).save(out / "ic_launcher.png")
+
+              im.resize(
+                  (size, size),
+                  Image.LANCZOS
+              ).save(out / "ic_launcher.png")
           PY
 
       - name: Build debug APK
@@ -171,27 +195,38 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release_files
-          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk release_files/PixLite-v8-cunning-debug.apk
-          cp "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab release_files/PixLite-v8-cunning-release.aab || true
+
+          cp \
+            "$PROJECT_DIR"/build/app/outputs/flutter-apk/*.apk \
+            release_files/PixLite-v10-premium-night-debug.apk
+
+          cp \
+            "$PROJECT_DIR"/build/app/outputs/bundle/release/*.aab \
+            release_files/PixLite-v10-premium-night-release.aab \
+            || true
+
           ls -la release_files
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v8-cunning-debug-apk
-          path: release_files/PixLite-v8-cunning-debug.apk
+          name: pixlite-v10-premium-night-debug-apk
+          path: release_files/PixLite-v10-premium-night-debug.apk
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-v8-cunning-release-aab
-          path: release_files/PixLite-v8-cunning-release.aab
+          name: pixlite-v10-premium-night-release-aab
+          path: release_files/PixLite-v10-premium-night-release.aab
+          if-no-files-found: ignore
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+
         run: |
-          TAG="pixlite-v8-cunning-${{ github.run_number }}-${{ github.run_attempt }}"
+          TAG="pixlite-v10-${{ github.run_number }}-${{ github.run_attempt }}"
+
           gh release create "$TAG" release_files/* \
-            --title "PixLite Android v8 Cunning Scanner ${{ github.run_number }}" \
-            --notes "PixLite v8 with Cunning Document Scanner. Download PixLite-v8-cunning-debug.apk for Android testing."
+            --title "PixLite v10 Premium Night ${{ github.run_number }}" \
+            --notes "PixLite v10 Premium Night: new premium dark UI, working scanner, quality tools, files/settings and three Home ad placements."
