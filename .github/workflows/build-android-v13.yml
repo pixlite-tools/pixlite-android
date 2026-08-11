@@ -1,0 +1,289 @@
+name: Build PixLite v13 Stable ML Kit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find v13 source ZIP
+        run: |
+          echo "Searching for PixLite v13..."
+          ZIP_FILE=$(find . -name "PixLite_Android_v13_StableMLKitSource*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: PixLite v13 ZIP not found"
+            exit 1
+          fi
+
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+          echo "Building from: $ZIP_FILE"
+
+      - name: Unzip source
+        run: |
+          rm -rf pixlite_source
+          mkdir pixlite_source
+          unzip "$ZIP_FILE" -d pixlite_source
+
+          PROJECT_DIR=$(dirname "$(find pixlite_source -name pubspec.yaml | head -n 1)")
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: pubspec.yaml not found"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project: $PROJECT_DIR"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          flutter --version
+          flutter pub get
+
+      - name: Create Android shell
+        run: |
+          cd "$PROJECT_DIR"
+          flutter create --platforms=android --org com.pixlite .
+
+      - name: Configure Android
+        run: |
+          cd "$PROJECT_DIR"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+
+          head = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+
+          permissions = '''
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+          '''
+
+          if "android.permission.INTERNET" not in text:
+              text = text.replace(
+                  head,
+                  head + permissions
+              )
+
+          text = text.replace(
+              'android:label="pixlite"',
+              'android:label="PixLite"'
+          )
+
+          text = text.replace(
+              'android:label="pixlite_android"',
+              'android:label="PixLite"'
+          )
+
+          admob = '''
+                  <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="ca-app-pub-3940256099942544~3347511713"/>
+          '''
+
+          if "com.google.android.gms.ads.APPLICATION_ID" not in text:
+              text = text.replace(
+                  "<activity",
+                  admob + "\n        <activity",
+                  1
+              )
+
+          manifest.write_text(text)
+
+          for path in [
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle")
+          ]:
+              if not path.exists():
+                  continue
+
+              s = path.read_text()
+
+              s = s.replace(
+                  "compileSdk = flutter.compileSdkVersion",
+                  "compileSdk = 36"
+              )
+
+              s = s.replace(
+                  "targetSdk = flutter.targetSdkVersion",
+                  "targetSdk = 36"
+              )
+
+              s = s.replace(
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = 21"
+              )
+
+              s = s.replace(
+                  "compileSdkVersion flutter.compileSdkVersion",
+                  "compileSdkVersion 36"
+              )
+
+              s = s.replace(
+                  "targetSdkVersion flutter.targetSdkVersion",
+                  "targetSdkVersion 36"
+              )
+
+              s = s.replace(
+                  "minSdkVersion flutter.minSdkVersion",
+                  "minSdkVersion 21"
+              )
+
+              path.write_text(s)
+          PY
+
+      - name: Generate high-quality launcher icon and native splash
+        run: |
+          cd "$PROJECT_DIR"
+
+          python3 -m pip install pillow
+
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          src = Path("assets/pixlite_icon.png")
+          im = Image.open(src).convert("RGBA")
+
+          res = Path("android/app/src/main/res")
+
+          sizes = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192
+          }
+
+          for folder, size in sizes.items():
+              out = res / folder
+              out.mkdir(parents=True, exist_ok=True)
+
+              im.resize(
+                  (size, size),
+                  Image.LANCZOS
+              ).save(out / "ic_launcher.png")
+
+          splash_sizes = {
+              "drawable-mdpi": 160,
+              "drawable-hdpi": 240,
+              "drawable-xhdpi": 320,
+              "drawable-xxhdpi": 480,
+              "drawable-xxxhdpi": 640
+          }
+
+          for folder, size in splash_sizes.items():
+              out = res / folder
+              out.mkdir(parents=True, exist_ok=True)
+
+              canvas = Image.new(
+                  "RGBA",
+                  (size, size),
+                  (0, 0, 0, 0)
+              )
+
+              mark = im.copy()
+              mark.thumbnail(
+                  (int(size * 0.72), int(size * 0.72)),
+                  Image.LANCZOS
+              )
+
+              x = (size - mark.width) // 2
+              y = (size - mark.height) // 2
+
+              canvas.alpha_composite(mark, (x, y))
+              canvas.save(out / "pixlite_splash.png")
+
+          drawable = res / "drawable"
+          drawable.mkdir(parents=True, exist_ok=True)
+
+          (drawable / "launch_background.xml").write_text(
+              '''<?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="#050814"/>
+              <item>
+                  <bitmap
+                      android:gravity="center"
+                      android:src="@drawable/pixlite_splash"/>
+              </item>
+          </layer-list>
+          '''
+          )
+
+          values_v31 = res / "values-v31"
+          values_v31.mkdir(
+              parents=True,
+              exist_ok=True
+          )
+
+          (values_v31 / "styles.xml").write_text(
+              '''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowSplashScreenBackground">#050814</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/pixlite_splash</item>
+                  <item name="android:windowSplashScreenIconBackgroundColor">#050814</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+                  <item name="android:windowNoTitle">true</item>
+              </style>
+
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">#050814</item>
+              </style>
+          </resources>
+          '''
+          )
+          PY
+
+      - name: Analyze source
+        run: |
+          cd "$PROJECT_DIR"
+          flutter analyze --no-fatal-infos || true
+
+      - name: Build v13 debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build apk --debug
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release_files
+
+          cp \
+            "$PROJECT_DIR"/build/app/outputs/flutter-apk/app-debug.apk \
+            release_files/PixLite-v13-stable-mlkit-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-v13-stable-mlkit-debug-apk
+          path: release_files/PixLite-v13-stable-mlkit-debug.apk
