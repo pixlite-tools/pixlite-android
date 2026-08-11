@@ -1,0 +1,130 @@
+name: Build PixLite v14 Scanbot Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find v14 ZIP
+        run: |
+          ZIP_FILE=$(find . -name "PixLite_Android_v14_ScanbotProof*.zip" | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: v14 ZIP not found"
+            exit 1
+          fi
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+
+      - name: Unzip source
+        run: |
+          rm -rf pixlite_source
+          mkdir pixlite_source
+          unzip "$ZIP_FILE" -d pixlite_source
+          PROJECT_DIR=$(dirname "$(find pixlite_source -name pubspec.yaml | head -n 1)")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          flutter pub get
+
+      - name: Create Android shell
+        run: |
+          cd "$PROJECT_DIR"
+          flutter create --platforms=android --org com.pixlite .
+
+      - name: Configure Android
+        run: |
+          cd "$PROJECT_DIR"
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+          head = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          additions = '''
+              <uses-permission android:name="android.permission.CAMERA"/>
+              <uses-feature android:name="android.hardware.camera"/>
+          '''
+          if "android.permission.CAMERA" not in text:
+              text = text.replace(head, head + additions)
+          text = text.replace('android:label="pixlite_scanbot_proof"', 'android:label="PixLite Scanbot Test"')
+          manifest.write_text(text)
+
+          for path in [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]:
+              if not path.exists():
+                  continue
+              s = path.read_text()
+              s = s.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              s = s.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
+              s = s.replace("minSdk = flutter.minSdkVersion", "minSdk = 23")
+              s = s.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              s = s.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
+              s = s.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 23")
+              path.write_text(s)
+          PY
+
+      - name: Generate launcher icon
+        run: |
+          cd "$PROJECT_DIR"
+          python3 -m pip install pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          src = Path("assets/pixlite_icon.png")
+          im = Image.open(src).convert("RGBA")
+          sizes = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192
+          }
+          base = Path("android/app/src/main/res")
+          for folder, size in sizes.items():
+              out = base / folder
+              out.mkdir(parents=True, exist_ok=True)
+              im.resize((size,size), Image.LANCZOS).save(out / "ic_launcher.png")
+          PY
+
+      - name: Analyze
+        run: |
+          cd "$PROJECT_DIR"
+          flutter analyze --no-fatal-infos || true
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build apk --debug
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release_files
+          cp "$PROJECT_DIR"/build/app/outputs/flutter-apk/app-debug.apk \
+            release_files/PixLite-v14-scanbot-proof-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-v14-scanbot-proof-debug-apk
+          path: release_files/PixLite-v14-scanbot-proof-debug.apk
