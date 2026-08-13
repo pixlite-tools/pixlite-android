@@ -12,7 +12,7 @@ from model.deep_lab_model.deeplab import *
 from MBD import mask_base_dewarper
 import time
 
-from utils import cvimg2torch,torch2cvimg
+from utils import cvimg2torch,torch2cvimg,convert_state_dict
 
 # --- CPU-compatibility patch (docres_quality_benchmark) ------------------
 # Upstream hardcodes .cuda(); this makes the same code path device-aware so
@@ -80,11 +80,19 @@ def net1_net2_infer_single_im(img,model_path):
                     freeze_bn=False)
     # CPU-compatibility patch: DataParallel + .cuda() only when a GPU is
     # actually present; otherwise run the plain module on DEVICE (CPU here).
-    if torch.cuda.is_available():
+    # mbd.pkl was saved from a DataParallel-wrapped model, so its state_dict
+    # keys carry a "module." prefix. When we skip DataParallel (no GPU), that
+    # prefix has to be stripped with convert_state_dict or every key comes up
+    # "missing" -- when DataParallel IS used, the prefix matches as-is.
+    use_data_parallel = torch.cuda.is_available()
+    if use_data_parallel:
         seg_model = torch.nn.DataParallel(seg_model, device_ids=range(torch.cuda.device_count()))
     seg_model = seg_model.to(DEVICE)
     checkpoint = torch.load(model_path, map_location=DEVICE)
-    seg_model.load_state_dict(checkpoint['model_state'])
+    state = checkpoint['model_state']
+    if not use_data_parallel:
+        state = convert_state_dict(state)
+    seg_model.load_state_dict(state)
     ### validate on the real datasets
     seg_model.eval()
     ### segmentation mask predict
