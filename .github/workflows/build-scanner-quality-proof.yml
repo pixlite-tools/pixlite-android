@@ -2,6 +2,9 @@ name: Build PixLite Scanner Quality Proof
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/pixlite-scanner-quality-49f1s3
 
 jobs:
   build:
