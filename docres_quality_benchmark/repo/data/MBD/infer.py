@@ -14,6 +14,12 @@ import time
 
 from utils import cvimg2torch,torch2cvimg
 
+# --- CPU-compatibility patch (docres_quality_benchmark) ------------------
+# Upstream hardcodes .cuda(); this makes the same code path device-aware so
+# it also runs on CPU-only machines. No change to model weights/behavior.
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# ---------------------------------------------------------------------------
+
 
 
 def net1_net2_infer(model,img_paths,args):
@@ -72,16 +78,19 @@ def net1_net2_infer_single_im(img,model_path):
                     output_stride=16,
                     sync_bn=None,
                     freeze_bn=False)
-    seg_model = torch.nn.DataParallel(seg_model, device_ids=range(torch.cuda.device_count()))
-    seg_model.cuda()
-    checkpoint = torch.load(model_path)
+    # CPU-compatibility patch: DataParallel + .cuda() only when a GPU is
+    # actually present; otherwise run the plain module on DEVICE (CPU here).
+    if torch.cuda.is_available():
+        seg_model = torch.nn.DataParallel(seg_model, device_ids=range(torch.cuda.device_count()))
+    seg_model = seg_model.to(DEVICE)
+    checkpoint = torch.load(model_path, map_location=DEVICE)
     seg_model.load_state_dict(checkpoint['model_state'])
     ### validate on the real datasets
     seg_model.eval()
     ### segmentation mask predict
     img_org = img
     h_org,w_org = img_org.shape[:2]
-    img = cv2.resize(img_org,(448, 448))       
+    img = cv2.resize(img_org,(448, 448))
     img = cv2.GaussianBlur(img,(15,15),0,0)
     img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
     img = cvimg2torch(img)
@@ -90,7 +99,7 @@ def net1_net2_infer_single_im(img,model_path):
         # from torchtoolbox.tools import summary
         # print(summary(seg_model,torch.rand((1, 3, 448, 448)).cuda())) 59.4M 135.6G
 
-        pred = seg_model(img.cuda())
+        pred = seg_model(img.to(DEVICE))
         mask_pred = pred[:,0,:,:].unsqueeze(1)
         mask_pred = F.interpolate(mask_pred,(h_org,w_org))
         mask_pred = mask_pred.squeeze(0).squeeze(0).cpu().numpy()

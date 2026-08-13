@@ -1,0 +1,60 @@
+name: DocRes Quality Benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/pixlite-scanner-quality-49f1s3
+    paths:
+      - "docres_quality_benchmark/**"
+      - ".github/workflows/build-docres-benchmark.yml"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies (CPU-only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install opencv-python-headless scikit-image einops tqdm huggingface_hub
+
+      - name: Download and verify DocRes weights
+        working-directory: docres_quality_benchmark
+        run: python download_weights.py
+
+      - name: Locate benchmark input image
+        working-directory: docres_quality_benchmark
+        run: |
+          IMG=$(find input -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) | head -n 1)
+          if [ -z "$IMG" ]; then
+            echo "::error::No input image found under docres_quality_benchmark/input/. Add the benchmark document image and push."
+            exit 1
+          fi
+          echo "Using input image: $IMG"
+          echo "INPUT_IMAGE=$IMG" >> "$GITHUB_ENV"
+
+      - name: Run DocRes benchmark (CPU)
+        working-directory: docres_quality_benchmark
+        run: python inference_cpu.py "$INPUT_IMAGE" output
+
+      - name: Show report
+        working-directory: docres_quality_benchmark
+        run: cat output/report.json
+
+      - name: Upload benchmark outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: docres-quality-benchmark-output
+          path: |
+            docres_quality_benchmark/output/*.png
+            docres_quality_benchmark/output/report.json
