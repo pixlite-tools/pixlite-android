@@ -26,6 +26,13 @@ import torch
 BENCH_DIR = Path(__file__).resolve().parent
 REPO_DIR = BENCH_DIR / "repo"
 
+# Resolve CLI paths to absolute *before* chdir'ing into REPO_DIR below --
+# otherwise relative paths like "input/document.jpg" (relative to the
+# original working directory) silently resolve against repo/ instead and
+# fail with a cryptic "can't open/read file".
+_ARGV_INPUT_IMAGE = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else None
+_ARGV_OUT_DIR = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
+
 os.chdir(REPO_DIR)
 sys.path.insert(0, str(REPO_DIR))
 sys.path.insert(0, str(REPO_DIR / "data" / "MBD"))
@@ -281,8 +288,8 @@ def dims(img):
 
 
 def main():
-    input_image = sys.argv[1]
-    out_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else (BENCH_DIR / "output")
+    input_image = _ARGV_INPUT_IMAGE
+    out_dir = Path(_ARGV_OUT_DIR) if _ARGV_OUT_DIR else (BENCH_DIR / "output")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     report = {"device": str(DEVICE), "input_image": input_image, "tasks": {}}
