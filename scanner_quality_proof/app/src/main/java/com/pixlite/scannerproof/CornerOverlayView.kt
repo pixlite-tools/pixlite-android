@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -93,7 +94,7 @@ class CornerOverlayView @JvmOverloads constructor(
 
         canvas.drawBitmap(
             bmp,
-            RectF(0f, 0f, bmpW, bmpH),
+            Rect(0, 0, bmp.width, bmp.height),
             RectF(imgLeft, imgTop, imgLeft + drawW, imgTop + drawH),
             null
         )
