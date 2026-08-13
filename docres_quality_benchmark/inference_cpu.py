@@ -42,8 +42,15 @@ _ARGV_INPUT_IMAGE = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 _ARGV_OUT_DIR = os.path.abspath(sys.argv[3]) if len(sys.argv) > 3 else None
 
 os.chdir(REPO_DIR)
-sys.path.insert(0, str(REPO_DIR))
+# Order matters: both repo/utils.py and repo/data/MBD/utils.py exist. The
+# official inference.py relies on the top-level one winning for `import
+# utils` (it appends data/MBD to sys.path, i.e. LOWEST priority) -- repo's
+# utils.py is a superset that also defines the cvimg2torch/torch2cvimg
+# functions data/MBD/infer.py needs, so one shared module satisfies both.
+# Insert data/MBD first (lower priority), then REPO_DIR last so it ends up
+# at sys.path[0] and wins the name collision.
 sys.path.insert(0, str(REPO_DIR / "data" / "MBD"))
+sys.path.insert(0, str(REPO_DIR))
 
 import utils  # repo/utils.py
 from utils import convert_state_dict
