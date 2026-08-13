@@ -152,9 +152,7 @@ class _AuditScreenState extends State<AuditScreen> {
       }
     }
     final zipData = ZipEncoder().encode(archive);
-    if (zipData != null) {
-      await File(zipPath).writeAsBytes(zipData);
-    }
+    await File(zipPath).writeAsBytes(zipData);
   }
 
   Future<void> runAudit() async {
