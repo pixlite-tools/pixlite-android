@@ -43,9 +43,37 @@ jobs:
           echo "Using input image: $IMG"
           echo "INPUT_IMAGE=$IMG" >> "$GITHUB_ENV"
 
-      - name: Run DocRes benchmark (CPU)
+      # Each task runs as its own process/step so peak memory from one task
+      # (loading the model + running inference at up to 1600x1600 on CPU)
+      # is fully released by process exit before the next task starts,
+      # instead of accumulating across tasks in one long-lived interpreter.
+      - name: "Task: original (passthrough copy)"
         working-directory: docres_quality_benchmark
-        run: python inference_cpu.py "$INPUT_IMAGE" output
+        run: python inference_cpu.py original "$INPUT_IMAGE" output
+
+      - name: "Task: deshadowing"
+        working-directory: docres_quality_benchmark
+        run: python inference_cpu.py deshadowing "$INPUT_IMAGE" output
+
+      - name: "Task: appearance"
+        working-directory: docres_quality_benchmark
+        run: python inference_cpu.py appearance "$INPUT_IMAGE" output
+
+      - name: "Task: deblurring"
+        working-directory: docres_quality_benchmark
+        run: python inference_cpu.py deblurring "$INPUT_IMAGE" output
+
+      - name: "Task: binarization"
+        working-directory: docres_quality_benchmark
+        run: python inference_cpu.py binarization "$INPUT_IMAGE" output
+
+      - name: "Task: end2end"
+        working-directory: docres_quality_benchmark
+        run: python inference_cpu.py end2end "$INPUT_IMAGE" output
+
+      - name: Merge per-task reports
+        working-directory: docres_quality_benchmark
+        run: python merge_report.py output
 
       - name: Show report
         working-directory: docres_quality_benchmark

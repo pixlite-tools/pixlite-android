@@ -30,8 +30,16 @@ REPO_DIR = BENCH_DIR / "repo"
 # otherwise relative paths like "input/document.jpg" (relative to the
 # original working directory) silently resolve against repo/ instead and
 # fail with a cryptic "can't open/read file".
-_ARGV_INPUT_IMAGE = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else None
-_ARGV_OUT_DIR = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
+#
+# Usage: python inference_cpu.py <task> <input_image> <out_dir>
+# <task> is one of: original, deshadowing, appearance, deblurring,
+# binarization, end2end. Each invocation handles exactly one task and exits
+# -- CI runs each task as its own workflow step/process so that one task's
+# peak memory is fully released (process exit) before the next task starts,
+# instead of accumulating across tasks in one long-lived interpreter.
+_ARGV_TASK = sys.argv[1] if len(sys.argv) > 1 else None
+_ARGV_INPUT_IMAGE = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
+_ARGV_OUT_DIR = os.path.abspath(sys.argv[3]) if len(sys.argv) > 3 else None
 
 os.chdir(REPO_DIR)
 sys.path.insert(0, str(REPO_DIR))
@@ -287,79 +295,86 @@ def dims(img):
     return {"width": int(w), "height": int(h)}
 
 
+def write_fragment(out_dir, task, entry):
+    with open(out_dir / f"_fragment_{task}.json", "w") as f:
+        json.dump({task: entry}, f, indent=2)
+
+
 def main():
+    task = _ARGV_TASK
     input_image = _ARGV_INPUT_IMAGE
     out_dir = Path(_ARGV_OUT_DIR) if _ARGV_OUT_DIR else (BENCH_DIR / "output")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    report = {"device": str(DEVICE), "input_image": input_image, "tasks": {}}
+    if task == "original":
+        t0 = time.time()
+        orig = cv2.imread(input_image)
+        if orig is None:
+            raise SystemExit(f"Could not read input image: {input_image}")
+        cv2.imwrite(str(out_dir / "original.png"), orig)
+        write_fragment(out_dir, "original", {
+            "time_sec": round(time.time() - t0, 3),
+            "output_dims": dims(orig),
+            "resize_info": {"resized": False},
+            "output_file": "original.png",
+        })
+        print(f"original: {dims(orig)}")
+        return
 
-    t0 = time.time()
-    orig = cv2.imread(input_image)
-    if orig is None:
-        raise SystemExit(f"Could not read input image: {input_image}")
-    cv2.imwrite(str(out_dir / "original.png"), orig)
-    report["input"] = dims(orig)
-    report["tasks"]["original"] = {"time_sec": round(time.time() - t0, 3), "output_dims": dims(orig), "resize_info": {"resized": False}}
-
-    print("Loading docres.pkl ...")
+    print(f"Loading docres.pkl for task={task} ...")
     model = model_init(DOCRES_MODEL_PATH)
 
-    def run(name, fn, path):
-        print(f"Running {name} ...")
+    if task in ("deshadowing", "appearance", "deblurring", "binarization"):
+        fn = {"deshadowing": deshadowing, "appearance": appearance,
+              "deblurring": deblurring, "binarization": binarization}[task]
+        print(f"Running {task} ...")
         t0 = time.time()
-        out_im, resize_info = fn(model, path)
+        out_im, resize_info = fn(model, input_image)
         elapsed = time.time() - t0
-        out_path = out_dir / f"{name}.png"
+        out_path = out_dir / f"{task}.png"
         cv2.imwrite(str(out_path), out_im)
-        report["tasks"][name] = {
+        write_fragment(out_dir, task, {
             "time_sec": round(elapsed, 3),
             "output_dims": dims(out_im),
             "resize_info": resize_info,
             "output_file": out_path.name,
-        }
-        print(f"  {name}: {elapsed:.2f}s, output {dims(out_im)}, resize_info={resize_info}")
-        return out_path
+        })
+        print(f"  {task}: {elapsed:.2f}s, output {dims(out_im)}, resize_info={resize_info}")
+        return
 
-    run("deshadowing", deshadowing, input_image)
-    run("appearance", appearance, input_image)
-    run("deblurring", deblurring, input_image)
-    run("binarization", binarization, input_image)
+    if task == "end2end":
+        # dewarping -> deshadowing -> appearance, chained. Intermediates are
+        # kept as PNG (not the reference script's JPG) to avoid an unrelated
+        # compression confound in this quality benchmark.
+        print("Running end2end ...")
+        t0 = time.time()
+        step1_im, step1_info = dewarping(model, input_image)
+        step1_path = out_dir / "_end2end_step1_dewarping.png"
+        cv2.imwrite(str(step1_path), step1_im)
 
-    # end2end: dewarping -> deshadowing -> appearance, chained.
-    # Intermediate steps are kept as PNG (not the reference script's JPG)
-    # to avoid an unrelated compression confound in this quality benchmark.
-    print("Running end2end ...")
-    t0 = time.time()
-    step1_im, step1_info = dewarping(model, input_image)
-    step1_path = out_dir / "_end2end_step1_dewarping.png"
-    cv2.imwrite(str(step1_path), step1_im)
+        step2_im, step2_info = deshadowing(model, str(step1_path))
+        step2_path = out_dir / "_end2end_step2_deshadowing.png"
+        cv2.imwrite(str(step2_path), step2_im)
 
-    step2_im, step2_info = deshadowing(model, str(step1_path))
-    step2_path = out_dir / "_end2end_step2_deshadowing.png"
-    cv2.imwrite(str(step2_path), step2_im)
+        step3_im, step3_info = appearance(model, str(step2_path))
+        elapsed = time.time() - t0
+        end2end_path = out_dir / "end2end.png"
+        cv2.imwrite(str(end2end_path), step3_im)
+        write_fragment(out_dir, "end2end", {
+            "time_sec": round(elapsed, 3),
+            "output_dims": dims(step3_im),
+            "resize_info": {
+                "step1_dewarping": step1_info,
+                "step2_deshadowing": step2_info,
+                "step3_appearance": step3_info,
+            },
+            "output_file": "end2end.png",
+            "note": "chained dewarping -> deshadowing -> appearance, matching the official end2end pipeline; intermediates kept as PNG",
+        })
+        print(f"  end2end: {elapsed:.2f}s, output {dims(step3_im)}")
+        return
 
-    step3_im, step3_info = appearance(model, str(step2_path))
-    elapsed = time.time() - t0
-    end2end_path = out_dir / "end2end.png"
-    cv2.imwrite(str(end2end_path), step3_im)
-    report["tasks"]["end2end"] = {
-        "time_sec": round(elapsed, 3),
-        "output_dims": dims(step3_im),
-        "resize_info": {
-            "step1_dewarping": step1_info,
-            "step2_deshadowing": step2_info,
-            "step3_appearance": step3_info,
-        },
-        "output_file": "end2end.png",
-        "note": "chained dewarping -> deshadowing -> appearance, matching the official end2end pipeline; intermediates kept as PNG",
-    }
-    print(f"  end2end: {elapsed:.2f}s, output {dims(step3_im)}")
-
-    report_path = out_dir / "report.json"
-    with open(report_path, "w") as f:
-        json.dump(report, f, indent=2)
-    print(f"Wrote {report_path}")
+    raise SystemExit(f"Unknown task: {task}")
 
 
 if __name__ == "__main__":
