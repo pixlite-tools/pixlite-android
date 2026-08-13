@@ -52,7 +52,12 @@ from data.preprocess.crop_merge_image import stride_integral
 from data.MBD.infer import net1_net2_infer_single_im
 
 DEVICE = torch.device("cpu")
-MAX_SIZE = 1600
+# Lowered from the official 1600: a single 1600x1600 6-channel FP32
+# Restormer forward pass alone (isolated in its own process) still got the
+# GitHub-hosted runner OOM-killed ("runner has received a shutdown
+# signal"), so this is a disclosed, hardware-forced practical ceiling for
+# CPU-only inference on a standard runner, not an arbitrary choice.
+MAX_SIZE = 1024
 
 MBD_MODEL_PATH = str(BENCH_DIR / "weights" / "MBD" / "mbd.pkl")
 DOCRES_MODEL_PATH = str(BENCH_DIR / "weights" / "DocRes" / "docres.pkl")
@@ -231,8 +236,31 @@ def deshadowing(model, im_path):
     return out_im, resized_note
 
 
+def _cap_for_memory(im_org):
+    """
+    deblurring/binarization have no resolution cap in the official code
+    (only multiple-of-8 padding at native resolution). At this image's
+    native size that alone was enough to OOM-kill the CPU runner, so this
+    downscales (aspect-preserving) before padding when needed. Disclosed
+    explicitly via the returned resize_info, matching the deshadowing/
+    appearance cap above.
+    """
+    h, w = im_org.shape[:2]
+    if max(h, w) <= MAX_SIZE:
+        return im_org, {"resized": False}
+    scale = MAX_SIZE / max(h, w)
+    resized = cv2.resize(im_org, (int(round(w * scale)), int(round(h * scale))))
+    return resized, {
+        "resized": True,
+        "reason": f"max(w,h)={max(w,h)} > MAX_SIZE={MAX_SIZE} (CPU memory constraint)",
+        "resized_to": [resized.shape[1], resized.shape[0]],
+    }
+
+
 def deblurring(model, im_path):
     im_org = cv2.imread(im_path)
+    orig_h, orig_w = im_org.shape[:2]
+    im_org, cap_info = _cap_for_memory(im_org)
     in_im, padding_h, padding_w = stride_integral(im_org, 8)
     prompt = deblur_prompt(in_im)
     in_im = np.concatenate((in_im, prompt), -1)
@@ -247,11 +275,15 @@ def deblurring(model, im_path):
         pred = pred[0].permute(1, 2, 0).cpu().numpy()
         pred = (pred * 255).astype(np.uint8)
         out_im = pred[padding_h:, padding_w:]
-    return out_im, {"resized": False, "padded_to_multiple_of_8": True, "padded_shape": list(in_im.shape[-2:])}
+    cap_info["padded_to_multiple_of_8"] = True
+    cap_info["padded_shape"] = list(in_im.shape[-2:])
+    cap_info["output_upscaled_to_original"] = False
+    return out_im, cap_info
 
 
 def binarization(model, im_path):
     im_org = cv2.imread(im_path)
+    im_org, cap_info = _cap_for_memory(im_org)
     im, padding_h, padding_w = stride_integral(im_org, 8)
     prompt = binarization_promptv2(im)
     h, w = im.shape[:2]
@@ -268,7 +300,9 @@ def binarization(model, im_path):
         pred = (pred * 255).astype(np.uint8)
         pred = cv2.resize(pred, (w, h))
         out_im = pred[padding_h:, padding_w:]
-    return out_im, {"resized": False, "padded_to_multiple_of_8": True, "padded_shape": [h, w]}
+    cap_info["padded_to_multiple_of_8"] = True
+    cap_info["padded_shape"] = [h, w]
+    return out_im, cap_info
 
 
 def model_init(model_path):
