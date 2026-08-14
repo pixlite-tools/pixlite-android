@@ -2,7 +2,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -65,7 +64,7 @@ class L {
     'en': {
       'tag':'SMART FILE TOOLS','hero':'Make files lighter,\ncleaner and ready.','hero_sub':'Compress, resize, scan, convert and create QR codes with a clean workflow.',
       'services':'Services','compress':'Compress','compress_sub':'Reduce image size','resize':'Resize','resize_sub':'Change dimensions','scan':'Scan','scan_sub':'Clean document photos',
-      'pdf':'Image to PDF','pdf_sub':'Create a PDF file','merge':'Merge','merge_sub':'Combine images into PDF','qr':'QR Code','qr_sub':'Generate QR locally','gallery':'Gallery','camera':'Camera','quality':'Quality','process':'Process',
+      'pdf':'Image to PDF','pdf_sub':'Create a PDF file','merge':'Merge','merge_sub':'Images to one PDF','qr':'QR Code','qr_sub':'Generate QR locally','gallery':'Gallery','camera':'Camera','quality':'Quality','process':'Process',
       'save_share':'Save / Share','width':'Width','height':'Height','keep_ratio':'Keep ratio','create_pdf':'Create PDF','generate_qr':'Generate QR','text_link':'Text or link',
       'ad':'Advertisement','after_result_ad':'Ad after result','before':'Before','after':'After'
     },
@@ -191,8 +190,6 @@ class _HomeScreenState extends State<HomeScreen>{
       if(tab==0) Padding(padding:const EdgeInsets.fromLTRB(12,8,12,0),child:BannerAdBox(label:widget.tr('ad'))),
       NavigationBar(height:70,backgroundColor:const Color(0xFF080D19),indicatorColor:kViolet.withOpacity(.22),selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:const [NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home_rounded),label:'Home'),NavigationDestination(icon:Icon(Icons.folder_outlined),selectedIcon:Icon(Icons.folder_rounded),label:'Files'),NavigationDestination(icon:Icon(Icons.settings_outlined),selectedIcon:Icon(Icons.settings_rounded),label:'Settings')]),
     ]),
-    floatingActionButton:FloatingActionButton(onPressed:()=>open(ScanScreen(tr:widget.tr)),backgroundColor:kViolet,foregroundColor:Colors.white,shape:const CircleBorder(),child:const Icon(Icons.document_scanner_rounded,size:28)),
-    floatingActionButtonLocation:FloatingActionButtonLocation.endFloat,
   );
 }
 class FilesScreen extends StatelessWidget{
@@ -226,28 +223,28 @@ class PickerPanel extends StatelessWidget { final String Function(String) tr; fi
 class ResultAd extends StatelessWidget { final bool show; final String label; const ResultAd({super.key,required this.show,required this.label}); @override Widget build(BuildContext context)=>show?Padding(padding: const EdgeInsets.only(top:14),child:BannerAdBox(label:label)): const SizedBox.shrink(); }
 
 // ---------------------------------------------------------------------------
-// Isolate-offloaded image/PDF work. Each function below runs via compute(),
-// on a separate isolate, so decode/encode/resize of large photos never
-// blocks the UI thread (per the "no large image processing on UI thread"
-// performance requirement).
+// Image/PDF processing helpers. These run synchronously on the main isolate
+// (no compute()/background isolate) so they can never accidentally touch a
+// Flutter plugin from a context without engine bindings -- decode/resize/PDF
+// generation here is pure Dart (image + pdf packages) and fast enough at
+// these resolutions that a short setState + frame yield keeps the busy
+// indicator visible without a real isolate hop.
 // ---------------------------------------------------------------------------
 
-class _CompressArgs { final Uint8List bytes; final int quality; const _CompressArgs(this.bytes,this.quality); }
-Uint8List _compressImageIsolate(_CompressArgs args){
-  final decoded=img.decodeImage(args.bytes);
-  if(decoded==null) throw Exception('decode failed');
-  return Uint8List.fromList(img.encodeJpg(decoded,quality:args.quality));
+Uint8List _compressImage(Uint8List bytes,int quality){
+  final decoded=img.decodeImage(bytes);
+  if(decoded==null) throw Exception('Could not decode image');
+  return Uint8List.fromList(img.encodeJpg(decoded,quality:quality));
 }
 
-class _ResizeArgs { final Uint8List bytes; final int width; final int height; const _ResizeArgs(this.bytes,this.width,this.height); }
-Uint8List _resizeImageIsolate(_ResizeArgs args){
-  final decoded=img.decodeImage(args.bytes);
-  if(decoded==null) throw Exception('decode failed');
-  final resized=img.copyResize(decoded,width:args.width,height:args.height,interpolation:img.Interpolation.average);
+Uint8List _resizeImage(Uint8List bytes,int width,int height){
+  final decoded=img.decodeImage(bytes);
+  if(decoded==null) throw Exception('Could not decode image');
+  final resized=img.copyResize(decoded,width:width,height:height,interpolation:img.Interpolation.average);
   return Uint8List.fromList(img.encodeJpg(resized,quality:92));
 }
 
-Future<Uint8List> _mergeImagesIsolate(List<Uint8List> images) async {
+Future<Uint8List> _mergeImagesToPdf(List<Uint8List> images) async {
   final doc=pw.Document();
   for(final bytes in images){
     final mem=pw.MemoryImage(bytes);
@@ -257,7 +254,7 @@ Future<Uint8List> _mergeImagesIsolate(List<Uint8List> images) async {
 }
 
 class CompressScreen extends StatefulWidget { final String Function(String) tr; const CompressScreen({super.key,required this.tr}); @override State<CompressScreen> createState()=>_CompressScreenState(); }
-class _CompressScreenState extends ImageToolState<CompressScreen>{ double quality=.82; Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); try{ final result=await compute(_compressImageIsolate,_CompressArgs(data,(quality*100).round())); setState(()=>output=result);}catch(_){showMsg('Processing failed');}finally{if(mounted)setState(()=>busy=false);} }
+class _CompressScreenState extends ImageToolState<CompressScreen>{ double quality=.82; Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); await Future.delayed(const Duration(milliseconds:50)); try{ final result=_compressImage(data,(quality*100).round()); if(!mounted)return; setState(()=>output=result); showMsg('Image compressed successfully'); }catch(e){showMsg('Compress failed: $e');}finally{if(mounted)setState(()=>busy=false);} }
   @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('compress'), child:Column(children:[PickerPanel(tr:widget.tr,bytes:output??input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12), CardBox(child:Column(children:[Row(children:[Text(widget.tr('quality'),style: const TextStyle(color:kText,fontWeight:FontWeight.w800)),const Spacer(),Text('${(quality*100).round()}%',style: const TextStyle(color:kSub))]), Slider(value:quality,min:.25,max:1,activeColor:kViolet,onChanged:(v)=>setState(()=>quality=v)), if(output!=null)Padding(padding: const EdgeInsets.only(bottom:8), child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('${widget.tr('before')} ${(input!.length/1024).round()} KB',style: const TextStyle(fontSize:11,color:kSub)), Text('${widget.tr('after')} ${(output!.length/1024).round()} KB',style: const TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:kMint))])), FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('process'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite-compressed.jpg'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
 }
 
@@ -265,7 +262,7 @@ class ResizeScreen extends StatefulWidget{ final String Function(String) tr; con
 class _ResizeScreenState extends ImageToolState<ResizeScreen>{ final w=TextEditingController(); final h=TextEditingController(); double ratio=1; bool keepRatio=true; @override void dispose(){w.dispose();h.dispose();super.dispose();}
   @override Future<void> choose(ImageSource source) async{ await super.choose(source); final d=img.decodeImage(input??Uint8List(0)); if(d!=null){ ratio=d.width/d.height; w.text=d.width.toString(); h.text=d.height.toString(); setState((){}); } }
   void syncHeight(String value){ if(!keepRatio||ratio==0)return; final width=int.tryParse(value); if(width==null||width<1)return; h.text=(width/ratio).round().toString(); }
-  Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); try{ final nw=int.tryParse(w.text)??0; final nh=int.tryParse(h.text)??0; final result=await compute(_resizeImageIsolate,_ResizeArgs(data,nw.clamp(1,10000),nh.clamp(1,10000))); setState(()=>output=result); }catch(_){showMsg('Resize failed');}finally{if(mounted)setState(()=>busy=false);} }
+  Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); await Future.delayed(const Duration(milliseconds:50)); try{ final nw=int.tryParse(w.text)??0; final nh=int.tryParse(h.text)??0; final result=_resizeImage(data,nw.clamp(1,10000),nh.clamp(1,10000)); if(!mounted)return; setState(()=>output=result); showMsg('Image resized successfully'); }catch(e){showMsg('Resize failed: $e');}finally{if(mounted)setState(()=>busy=false);} }
   @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('resize'), child:Column(children:[PickerPanel(tr:widget.tr,bytes:output??input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12),CardBox(child:Column(children:[Row(children:[Expanded(child:TextField(controller:w,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:widget.tr('width')),onChanged:syncHeight)),const SizedBox(width:8),Expanded(child:TextField(controller:h,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:widget.tr('height'))))]), const SizedBox(height:8), SwitchListTile(contentPadding:EdgeInsets.zero,value:keepRatio,activeColor:kMint,onChanged:(v)=>setState(()=>keepRatio=v),title:Text(widget.tr('keep_ratio'),style: const TextStyle(color:kText,fontWeight:FontWeight.w700))), FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('process'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite-resized.jpg'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
 }
 
@@ -427,7 +424,7 @@ class _ScanScreenState extends State<ScanScreen>{
 
 
 class ImageToPdfScreen extends StatefulWidget{ final String Function(String) tr; const ImageToPdfScreen({super.key,required this.tr}); @override State<ImageToPdfScreen> createState()=>_ImageToPdfScreenState(); }
-class _ImageToPdfScreenState extends ImageToolState<ImageToPdfScreen>{ Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); try{ final pdfBytes=await compute(_mergeImagesIsolate,[data]); setState(()=>output=pdfBytes); }catch(_){showMsg('PDF failed');}finally{if(mounted)setState(()=>busy=false);} }
+class _ImageToPdfScreenState extends ImageToolState<ImageToPdfScreen>{ Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); await Future.delayed(const Duration(milliseconds:50)); try{ final pdfBytes=await _mergeImagesToPdf([data]); if(!mounted)return; setState(()=>output=pdfBytes); showMsg('PDF created successfully'); }catch(e){showMsg('PDF creation failed: $e');}finally{if(mounted)setState(()=>busy=false);} }
   @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('pdf'), child:Column(children:[PickerPanel(tr:widget.tr,bytes:input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12),CardBox(child:Column(children:[FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('create_pdf'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite.pdf'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
 }
 
@@ -461,10 +458,13 @@ class _MergeScreenState extends State<MergeScreen>{
   Future<void> merge() async {
     if(images.isEmpty)return;
     setState(()=>busy=true);
+    await Future.delayed(const Duration(milliseconds:50));
     try{
-      final result=await compute(_mergeImagesIsolate,images);
+      final result=await _mergeImagesToPdf(images);
+      if(!mounted)return;
       setState(()=>output=result);
-    }catch(_){ showMsg('Merge failed'); }
+      showMsg('PDF created successfully');
+    }catch(e){ showMsg('Merge failed: $e'); }
     finally{ if(mounted) setState(()=>busy=false); }
   }
 
