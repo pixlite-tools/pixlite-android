@@ -1,7 +1,9 @@
 name: pixlite
-description: PixLite premium Android utility app.
+description: >-
+  PDF tools for everyday documents. Create, merge, compress and scan files
+  from your phone.
 publish_to: "none"
-version: 1.0.0+14
+version: 1.0.0+15
 
 environment:
   sdk: ">=3.10.0-0 <4.0.0"
