@@ -80,6 +80,49 @@ jobs:
               s = s.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
               s = s.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
               path.write_text(s)
+
+          # Conservative release-size optimizations, appended as a SEPARATE
+          # `android { }` configuration block rather than editing the
+          # generated block above -- Gradle's Kotlin DSL merges multiple
+          # `buildTypes { release { ... } }` invocations, so this only adds
+          # minify/shrink + proguard wiring without risking a fragile
+          # string-edit of Flutter's own generated release config.
+          kts = Path("android/app/build.gradle.kts")
+          if kts.exists():
+              kts.write_text(kts.read_text() + '''
+
+          android {
+              buildTypes {
+                  release {
+                      isMinifyEnabled = true
+                      isShrinkResources = true
+                      proguardFiles(
+                          getDefaultProguardFile("proguard-android-optimize.txt"),
+                          "proguard-rules.pro"
+                      )
+                  }
+              }
+          }
+          ''')
+
+          proguard = Path("android/app/proguard-rules.pro")
+          proguard.write_text('''# Conservative keep rules for R8 in release builds.
+          # Flutter's own engine/plugin embedding classes.
+          -keep class io.flutter.app.** { *; }
+          -keep class io.flutter.plugin.** { *; }
+          -keep class io.flutter.util.** { *; }
+          -keep class io.flutter.view.** { *; }
+          -keep class io.flutter.** { *; }
+          -keep class io.flutter.plugins.** { *; }
+
+          # Google ML Kit document scanner + underlying Play Services --
+          # these use reflection-heavy dynamic module loading that R8's
+          # static analysis can't always see through.
+          -keep class com.google.mlkit.** { *; }
+          -keep class com.google.android.gms.** { *; }
+          -dontwarn com.google.mlkit.**
+          -dontwarn com.google.android.gms.**
+          ''')
           PY
 
       - name: Generate high-quality launcher icon and splash
@@ -106,9 +149,6 @@ jobs:
               out.mkdir(parents=True, exist_ok=True)
               im.resize((size, size), Image.LANCZOS).save(out / "ic_launcher.png")
 
-          # Kept intentionally simple: solid dark background + centered mark,
-          # no animation, no extra frames -- the splash must never be the
-          # slow part of startup.
           splash_sizes = {
               "drawable-mdpi": 160,
               "drawable-hdpi": 240,
@@ -155,18 +195,65 @@ jobs:
         working-directory: pixlite_production
         run: flutter analyze --no-fatal-infos || true
 
-      - name: Build production debug APK
+      - name: Build debug APK (before-size baseline)
         working-directory: pixlite_production
         run: flutter build apk --debug
 
-      - name: Prepare artifact
+      - name: Build release APK (universal)
+        working-directory: pixlite_production
+        run: flutter build apk --release
+
+      - name: Build release APK (split per ABI)
+        working-directory: pixlite_production
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build release AAB
+        working-directory: pixlite_production
+        run: flutter build appbundle --release
+
+      - name: Size analysis
+        working-directory: pixlite_production
+        run: |
+          set -e
+          REPORT=size_report.txt
+          {
+            echo "=== File sizes ==="
+            ls -la build/app/outputs/flutter-apk/*.apk build/app/outputs/bundle/release/*.aab 2>/dev/null
+            echo
+            for apk in build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/app-release.apk; do
+              name=$(basename "$apk")
+              echo "=== $name : top-level content breakdown ==="
+              rm -rf /tmp/apk_inspect && mkdir -p /tmp/apk_inspect
+              unzip -o -q "$apk" -d /tmp/apk_inspect
+              du -sh /tmp/apk_inspect/*/ 2>/dev/null | sort -rh
+              echo "--- native libs per ABI (if any) ---"
+              du -sh /tmp/apk_inspect/lib/*/ 2>/dev/null | sort -rh
+              echo "--- 15 largest individual files ---"
+              find /tmp/apk_inspect -type f -exec du -b {} + | sort -rn | head -15
+              echo
+            done
+          } | tee "$REPORT"
+
+      - name: Prepare artifacts
         run: |
           mkdir -p release_files
           cp pixlite_production/build/app/outputs/flutter-apk/app-debug.apk \
             release_files/PixLite-production-debug.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk \
+            release_files/PixLite-production-release-universal.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+            release_files/PixLite-production-release-arm64-v8a.apk || true
+          cp pixlite_production/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+            release_files/PixLite-production-release-armeabi-v7a.apk || true
+          cp pixlite_production/build/app/outputs/flutter-apk/app-x86_64-release.apk \
+            release_files/PixLite-production-release-x86_64.apk || true
+          cp pixlite_production/build/app/outputs/bundle/release/app-release.aab \
+            release_files/PixLite-production-release.aab
+          cp pixlite_production/size_report.txt release_files/size_report.txt
+          ls -la release_files/
 
-      - name: Upload APK artifact
+      - name: Upload APK/AAB artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-production-debug-apk
-          path: release_files/PixLite-production-debug.apk
+          name: pixlite-production-release-build
+          path: release_files/*

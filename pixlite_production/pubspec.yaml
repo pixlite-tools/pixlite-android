@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
   image_picker: ^1.1.2
   image: ^4.8.0
   path_provider: ^2.1.5
@@ -27,5 +26,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/pixlite_icon.png
+  # assets/pixlite_icon.png is intentionally NOT declared here: it is only
+  # ever read directly off disk by the CI workflow to generate native
+  # launcher-icon/splash bitmaps at build time. It is never displayed via
+  # Flutter's asset system, so bundling it into the app's asset bundle too
+  # would just be dead weight in the installed app.
