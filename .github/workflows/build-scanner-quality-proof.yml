@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - claude/pixlite-scanner-quality-49f1s3
+    paths:
+      - "scanner_quality_proof/**"
+      - ".github/workflows/build-scanner-quality-proof.yml"
 
 jobs:
   build:

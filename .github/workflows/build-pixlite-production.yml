@@ -1,0 +1,172 @@
+name: Build PixLite Production
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/pixlite-scanner-quality-49f1s3
+    paths:
+      - "pixlite_production/**"
+      - ".github/workflows/build-pixlite-production.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        working-directory: pixlite_production
+        run: |
+          flutter --version
+          flutter pub get
+
+      - name: Create Android shell
+        working-directory: pixlite_production
+        run: flutter create --platforms=android --org com.pixlite .
+
+      - name: Configure Android
+        working-directory: pixlite_production
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+          head = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          perms = '''
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+          '''
+          if "android.permission.INTERNET" not in text:
+              text = text.replace(head, head + perms)
+
+          text = text.replace('android:label="pixlite"', 'android:label="PixLite"')
+          text = text.replace('android:label="pixlite_production"', 'android:label="PixLite"')
+
+          admob = '''
+                  <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="ca-app-pub-3940256099942544~3347511713"/>
+          '''
+          if "com.google.android.gms.ads.APPLICATION_ID" not in text:
+              text = text.replace("<activity", admob + "\n        <activity", 1)
+          manifest.write_text(text)
+
+          for path in [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]:
+              if not path.exists():
+                  continue
+              s = path.read_text()
+              s = s.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              s = s.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
+              s = s.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
+              s = s.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              s = s.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
+              s = s.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+              path.write_text(s)
+          PY
+
+      - name: Generate high-quality launcher icon and splash
+        working-directory: pixlite_production
+        run: |
+          python3 -m pip install pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          src = Path("assets/pixlite_icon.png")
+          im = Image.open(src).convert("RGBA")
+          res = Path("android/app/src/main/res")
+
+          launcher_sizes = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192,
+          }
+          for folder, size in launcher_sizes.items():
+              out = res / folder
+              out.mkdir(parents=True, exist_ok=True)
+              im.resize((size, size), Image.LANCZOS).save(out / "ic_launcher.png")
+
+          # Kept intentionally simple: solid dark background + centered mark,
+          # no animation, no extra frames -- the splash must never be the
+          # slow part of startup.
+          splash_sizes = {
+              "drawable-mdpi": 160,
+              "drawable-hdpi": 240,
+              "drawable-xhdpi": 320,
+              "drawable-xxhdpi": 480,
+              "drawable-xxxhdpi": 640,
+          }
+          for folder, size in splash_sizes.items():
+              out = res / folder
+              out.mkdir(parents=True, exist_ok=True)
+              canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+              mark = im.copy()
+              mark.thumbnail((int(size * 0.72), int(size * 0.72)), Image.LANCZOS)
+              canvas.alpha_composite(mark, ((size - mark.width)//2, (size - mark.height)//2))
+              canvas.save(out / "pixlite_splash.png")
+
+          drawable = res / "drawable"
+          drawable.mkdir(parents=True, exist_ok=True)
+          (drawable / "launch_background.xml").write_text('''<?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="#050814"/>
+              <item>
+                  <bitmap android:gravity="center" android:src="@drawable/pixlite_splash"/>
+              </item>
+          </layer-list>''')
+
+          v31 = res / "values-v31"
+          v31.mkdir(parents=True, exist_ok=True)
+          (v31 / "styles.xml").write_text('''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowSplashScreenBackground">#050814</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/pixlite_splash</item>
+                  <item name="android:windowSplashScreenIconBackgroundColor">#050814</item>
+                  <item name="android:windowNoTitle">true</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">#050814</item>
+              </style>
+          </resources>''')
+          PY
+
+      - name: Analyze source
+        working-directory: pixlite_production
+        run: flutter analyze --no-fatal-infos || true
+
+      - name: Build production debug APK
+        working-directory: pixlite_production
+        run: flutter build apk --debug
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release_files
+          cp pixlite_production/build/app/outputs/flutter-apk/app-debug.apk \
+            release_files/PixLite-production-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-production-debug-apk
+          path: release_files/PixLite-production-debug.apk
