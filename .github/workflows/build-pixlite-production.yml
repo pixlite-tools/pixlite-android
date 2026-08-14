@@ -122,6 +122,19 @@ jobs:
           -keep class com.google.android.gms.** { *; }
           -dontwarn com.google.mlkit.**
           -dontwarn com.google.android.gms.**
+
+          # Flutter's engine references Google Play Core's "deferred
+          # components" (dynamic feature module) APIs from
+          # io.flutter.embedding.engine.deferredcomponents /
+          # FlutterPlayStoreSplitApplication even though this app doesn't
+          # use deferred components and doesn't depend on
+          # com.google.android.play:core. R8 treats referenced-but-absent
+          # classes as a hard build error unless told to ignore them --
+          # this is a known, documented Flutter+R8 interaction, not a
+          # missing feature of this app.
+          -dontwarn com.google.android.play.core.splitcompat.**
+          -dontwarn com.google.android.play.core.splitinstall.**
+          -dontwarn com.google.android.play.core.tasks.**
           ''')
           PY
 
