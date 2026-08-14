@@ -81,12 +81,25 @@ jobs:
               s = s.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
               path.write_text(s)
 
-          # Conservative release-size optimizations, appended as a SEPARATE
-          # `android { }` configuration block rather than editing the
-          # generated block above -- Gradle's Kotlin DSL merges multiple
+          # Release-size optimizations, appended as a SEPARATE `android {}`
+          # configuration block rather than editing the generated block
+          # above -- Gradle's Kotlin DSL merges multiple
           # `buildTypes { release { ... } }` invocations, so this only adds
           # minify/shrink + proguard wiring without risking a fragile
           # string-edit of Flutter's own generated release config.
+          #
+          # TEMPORARILY DISABLED (isMinifyEnabled/isShrinkResources = false):
+          # the minified arm64-v8a release APK crashed immediately on launch
+          # on a real device, while the unminified debug build launched fine
+          # -- a release-only crash is the classic signature of R8 stripping
+          # something at runtime that our proguard-rules.pro keep list
+          # didn't fully cover (most likely in google_mobile_ads or
+          # google_mlkit_document_scanner, both reflection-heavy). Priority
+          # right now is a release build that actually launches; shrinking
+          # comes back once that's confirmed stable on-device, with keep
+          # rules built up incrementally against real crash logs instead of
+          # guessed in bulk. shrinkResources also requires minifyEnabled, so
+          # both must move together.
           kts = Path("android/app/build.gradle.kts")
           if kts.exists():
               kts.write_text(kts.read_text() + '''
@@ -94,8 +107,8 @@ jobs:
           android {
               buildTypes {
                   release {
-                      isMinifyEnabled = true
-                      isShrinkResources = true
+                      isMinifyEnabled = false
+                      isShrinkResources = false
                       proguardFiles(
                           getDefaultProguardFile("proguard-android-optimize.txt"),
                           "proguard-rules.pro"
