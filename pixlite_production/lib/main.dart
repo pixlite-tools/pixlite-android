@@ -326,25 +326,19 @@ class ScanScreen extends StatefulWidget{
 
 class _ScanScreenState extends State<ScanScreen>{
   final List<String> imagePaths=[];
-  String? pdfPath;
-  int? pdfPages;
   int pageIndex=0;
   bool busy=false;
+  bool pdfBusy=false;
   DocumentScanner? scanner;
 
   bool get hasImages=>imagePaths.isNotEmpty;
-  bool get hasResult=>hasImages||pdfPath!=null;
-
-  String _filePathFromUri(String uri){
-    if(uri.startsWith('file://')) return Uri.parse(uri).toFilePath();
-    return uri;
-  }
+  bool get hasResult=>hasImages;
 
   Future<void> startScan() async{
     if(busy)return;
     setState(()=>busy=true);
     try{
-      const formats=<DocumentFormat>{DocumentFormat.jpeg,DocumentFormat.pdf};
+      const formats=<DocumentFormat>{DocumentFormat.jpeg};
       final options=DocumentScannerOptions(
         documentFormats:formats,
         mode:ScannerMode.full,
@@ -354,18 +348,15 @@ class _ScanScreenState extends State<ScanScreen>{
       scanner=DocumentScanner(options:options);
       final result=await scanner!.scanDocument();
       final images=result.images??<String>[];
-      final pdf=result.pdf;
       for(final p in images){
         await _normalizeImageOrientation(p);
       }
       if(!mounted)return;
       setState((){
         imagePaths..clear()..addAll(images);
-        pdfPath=pdf==null?null:_filePathFromUri(pdf.uri);
-        pdfPages=pdf?.pageCount;
         pageIndex=0;
       });
-      if(images.isEmpty&&pdf==null){
+      if(images.isEmpty){
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No scanned document was returned.')));
       }
     }catch(e){
@@ -381,11 +372,34 @@ class _ScanScreenState extends State<ScanScreen>{
     if(imagePaths.isEmpty)return;
     await Share.shareXFiles(imagePaths.map((p)=>XFile(p)).toList());
   }
+
+  // The PDF the ML Kit document scanner SDK builds natively (result.pdf)
+  // turned out to still be rotated on real-device testing, even after
+  // the scanned image files themselves were corrected -- that PDF is
+  // generated entirely inside the scanner engine from its own raw frame
+  // data, independent of the corrected image files, and fixing it would
+  // mean changing the scanner engine, which is out of scope. Instead, the
+  // shared PDF is now built here in Dart from the same already-corrected
+  // image files used for the preview and "Save/Share images", using the
+  // same pure-Dart PDF builder the Merge/Create PDF tools use -- so it
+  // can never disagree with what the user already sees on screen.
   Future<void> sharePdf() async{
-    final p=pdfPath; if(p==null)return;
-    await Share.shareXFiles([XFile(p)]);
+    if(imagePaths.isEmpty||pdfBusy)return;
+    setState(()=>pdfBusy=true);
+    try{
+      final images=await Future.wait(imagePaths.map((p)=>File(p).readAsBytes()));
+      final pdfBytes=await _mergeImagesToPdf(images);
+      final dir=await getTemporaryDirectory();
+      final file=File('${dir.path}/pixlite-scan.pdf');
+      await file.writeAsBytes(pdfBytes,flush:true);
+      await Share.shareXFiles([XFile(file.path)]);
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF export failed: $e')));
+    }finally{
+      if(mounted)setState(()=>pdfBusy=false);
+    }
   }
-  void newScan(){setState((){imagePaths.clear();pdfPath=null;pdfPages=null;pageIndex=0;});}
+  void newScan(){setState((){imagePaths.clear();pageIndex=0;});}
   @override void dispose(){try{scanner?.close();}catch(_){} super.dispose();}
 
   @override Widget build(BuildContext context)=>ToolShell(
@@ -454,11 +468,11 @@ class _ScanScreenState extends State<ScanScreen>{
               const Text('EXPORT',style:TextStyle(color:kSub,fontSize:10,fontWeight:FontWeight.w900,letterSpacing:1.1)),
               const SizedBox(height:9),
               if(hasImages)OutlinedButton.icon(onPressed:shareImages,icon:const Icon(Icons.image_outlined),label:const Text('Save / Share images')),
-              if(pdfPath!=null)...[
-                if(hasImages)const SizedBox(height:8),
+              if(hasImages)...[
+                const SizedBox(height:8),
                 FilledButton.icon(
-                  onPressed:sharePdf,icon:const Icon(Icons.picture_as_pdf_rounded),
-                  label:Text(pdfPages==null?'Save / Share PDF':'Save / Share PDF • $pdfPages page(s)')
+                  onPressed:pdfBusy?null:sharePdf,icon:Icon(pdfBusy?Icons.hourglass_empty_rounded:Icons.picture_as_pdf_rounded),
+                  label:Text(pdfBusy?'Preparing PDF…':'Save / Share PDF • ${imagePaths.length} page(s)')
                 ),
               ],
               const SizedBox(height:8),
