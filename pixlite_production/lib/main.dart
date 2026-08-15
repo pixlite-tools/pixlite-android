@@ -281,6 +281,20 @@ Future<void> _normalizeImageOrientation(String path) async {
 
     decoded=img.copyRotate(decoded,angle:180);
 
+    // Strip all EXIF metadata before writing the file back out. Real-device
+    // testing found PixLite's own in-app preview (Flutter's Image.file,
+    // which never reads EXIF) showing the page upright after this fix, but
+    // the exact same saved/shared file opening rotated in Gallery/Files/
+    // WhatsApp -- all of which DO read EXIF. That only happens if a stale
+    // orientation tag from the original file is still being carried
+    // through (bakeOrientation clears it when it runs, but copyRotate just
+    // clones whatever EXIF was already on the image) and gets written back
+    // into the re-encoded JPEG, so EXIF-aware viewers apply an extra
+    // rotation on top of pixels that are already corrected. Scanned
+    // documents have no camera metadata worth keeping, so clearing EXIF
+    // entirely removes any chance of that mismatch.
+    decoded.exif=img.ExifData();
+
     final reencoded=Uint8List.fromList(img.encodeJpg(decoded,quality:100));
     await file.writeAsBytes(reencoded,flush:true);
   }catch(_){
