@@ -253,6 +253,34 @@ Future<Uint8List> _mergeImagesToPdf(List<Uint8List> images) async {
   return Uint8List.fromList(await doc.save());
 }
 
+// Flutter's Image.file (Skia's JPEG decoder) never applies the EXIF
+// orientation tag -- it always shows the pixel grid exactly as stored. Some
+// devices hand the document scanner a capture whose pixels are stored
+// sideways with an EXIF orientation tag describing the correction, instead
+// of physically rotated pixels. That looks fine in apps that read EXIF
+// (Google Photos, the scanner's own review screen) but sideways/upside-down
+// in PixLite's preview and in anything the raw file is later shared to.
+// Baking the orientation into the pixels once, right after the scan result
+// comes back, makes every consumer that touches this same file path
+// (preview, share, save) see the same upright image. When the file is
+// already upright (the common case), this is a no-op and never rewrites or
+// recompresses it.
+Future<void> _normalizeImageOrientation(String path) async {
+  try {
+    final file=File(path);
+    final bytes=await file.readAsBytes();
+    final decoded=img.decodeImage(bytes);
+    if(decoded==null) return;
+    final ifd=decoded.exif.imageIfd;
+    if(!ifd.hasOrientation||ifd.orientation==1) return;
+    final corrected=img.bakeOrientation(decoded);
+    final reencoded=Uint8List.fromList(img.encodeJpg(corrected,quality:100));
+    await file.writeAsBytes(reencoded,flush:true);
+  }catch(_){
+    // Leave the original scanned file untouched rather than risk losing it.
+  }
+}
+
 class CompressScreen extends StatefulWidget { final String Function(String) tr; const CompressScreen({super.key,required this.tr}); @override State<CompressScreen> createState()=>_CompressScreenState(); }
 class _CompressScreenState extends ImageToolState<CompressScreen>{ double quality=.82; Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); await Future.delayed(const Duration(milliseconds:50)); try{ final result=_compressImage(data,(quality*100).round()); if(!mounted)return; setState(()=>output=result); showMsg('Image compressed successfully'); }catch(e){showMsg('Compress failed: $e');}finally{if(mounted)setState(()=>busy=false);} }
   @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('compress'), child:Column(children:[PickerPanel(tr:widget.tr,bytes:output??input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12), CardBox(child:Column(children:[Row(children:[Text(widget.tr('quality'),style: const TextStyle(color:kText,fontWeight:FontWeight.w800)),const Spacer(),Text('${(quality*100).round()}%',style: const TextStyle(color:kSub))]), Slider(value:quality,min:.25,max:1,activeColor:kViolet,onChanged:(v)=>setState(()=>quality=v)), if(output!=null)Padding(padding: const EdgeInsets.only(bottom:8), child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('${widget.tr('before')} ${(input!.length/1024).round()} KB',style: const TextStyle(fontSize:11,color:kSub)), Text('${widget.tr('after')} ${(output!.length/1024).round()} KB',style: const TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:kMint))])), FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('process'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite-compressed.jpg'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
@@ -306,6 +334,9 @@ class _ScanScreenState extends State<ScanScreen>{
       final result=await scanner!.scanDocument();
       final images=result.images??<String>[];
       final pdf=result.pdf;
+      for(final p in images){
+        await _normalizeImageOrientation(p);
+      }
       if(!mounted)return;
       setState((){
         imagePaths..clear()..addAll(images);
