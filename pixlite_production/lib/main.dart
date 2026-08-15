@@ -422,7 +422,11 @@ class _ScanScreenState extends State<ScanScreen>{
                 SizedBox(height:6),
                 Padding(padding:EdgeInsets.symmetric(horizontal:28),child:Text(
                   'The first launch may take longer while Google Play services prepares the scanner.',
-                  textAlign:TextAlign.center,style:TextStyle(color:kSub,fontSize:11,height:1.4)))
+                  textAlign:TextAlign.center,style:TextStyle(color:kSub,fontSize:11,height:1.4))),
+                SizedBox(height:10),
+                Padding(padding:EdgeInsets.symmetric(horizontal:28),child:Text(
+                  'Tip: the scanner\'s own preview screen may look rotated — that\'s normal. Tap "Suivant"/"Next" and PixLite will show and save it upright.',
+                  textAlign:TextAlign.center,style:TextStyle(color:kMint,fontSize:11,height:1.4,fontWeight:FontWeight.w700)))
               ])
             :hasImages
               ? Stack(children:[
@@ -443,7 +447,11 @@ class _ScanScreenState extends State<ScanScreen>{
                   SizedBox(height:8),
                   Padding(padding:EdgeInsets.symmetric(horizontal:26),child:Text(
                     'Scan a document, adjust it if needed, then save it as an image or PDF.',
-                    textAlign:TextAlign.center,style:TextStyle(color:kSub,fontSize:11.5,height:1.45)))
+                    textAlign:TextAlign.center,style:TextStyle(color:kSub,fontSize:11.5,height:1.45))),
+                  SizedBox(height:8),
+                  Padding(padding:EdgeInsets.symmetric(horizontal:26),child:Text(
+                    'Note: the scanner\'s own preview may briefly look rotated before you confirm — PixLite always shows and saves the final result upright.',
+                    textAlign:TextAlign.center,style:TextStyle(color:kMint,fontSize:10.5,height:1.4,fontWeight:FontWeight.w700)))
                 ])
         ),
         if(hasImages)...[
