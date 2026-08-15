@@ -254,27 +254,34 @@ Future<Uint8List> _mergeImagesToPdf(List<Uint8List> images) async {
 }
 
 // Flutter's Image.file (Skia's JPEG decoder) never applies the EXIF
-// orientation tag -- it always shows the pixel grid exactly as stored. Some
-// devices hand the document scanner a capture whose pixels are stored
-// sideways with an EXIF orientation tag describing the correction, instead
-// of physically rotated pixels. That looks fine in apps that read EXIF
-// (Google Photos, the scanner's own review screen) but sideways/upside-down
-// in PixLite's preview and in anything the raw file is later shared to.
-// Baking the orientation into the pixels once, right after the scan result
-// comes back, makes every consumer that touches this same file path
-// (preview, share, save) see the same upright image. When the file is
-// already upright (the common case), this is a no-op and never rewrites or
-// recompresses it.
+// orientation tag -- it always shows the pixel grid exactly as stored. The
+// first fix here only baked EXIF orientation into the pixels when an EXIF
+// tag said the image was rotated -- that turned out to be insufficient:
+// real-device testing (portrait hold, landscape hold, portrait document,
+// landscape document) showed the scanner consistently returns pages
+// upside down (180°) with no EXIF orientation tag describing it at all --
+// the flip is baked into the pixel data itself, not just metadata, and it
+// happened the same way regardless of how the phone was held while
+// scanning. So on top of the EXIF check (kept for robustness on other
+// devices that may set the tag), every scanned page now gets an
+// unconditional 180° correction. Both corrections happen once, right after
+// the scan result comes back, so every consumer that touches this same
+// file path (preview, "Save/Share images") sees the same upright image.
 Future<void> _normalizeImageOrientation(String path) async {
   try {
     final file=File(path);
     final bytes=await file.readAsBytes();
-    final decoded=img.decodeImage(bytes);
+    var decoded=img.decodeImage(bytes);
     if(decoded==null) return;
+
     final ifd=decoded.exif.imageIfd;
-    if(!ifd.hasOrientation||ifd.orientation==1) return;
-    final corrected=img.bakeOrientation(decoded);
-    final reencoded=Uint8List.fromList(img.encodeJpg(corrected,quality:100));
+    if(ifd.hasOrientation&&ifd.orientation!=1){
+      decoded=img.bakeOrientation(decoded);
+    }
+
+    decoded=img.copyRotate(decoded,angle:180);
+
+    final reencoded=Uint8List.fromList(img.encodeJpg(decoded,quality:100));
     await file.writeAsBytes(reencoded,flush:true);
   }catch(_){
     // Leave the original scanned file untouched rather than risk losing it.
