@@ -41,6 +41,42 @@ s = s.replace("label:'Home'", "label:widget.tr('home')")
 s = s.replace("label:'Files'", "label:widget.tr('files')")
 s = s.replace("label:'Settings'", "label:widget.tr('settings')")
 
+# Collapse failed/no-fill banner slots completely instead of leaving dead boxes.
+banner_state_re = r"class _BannerAdBoxState extends State<BannerAdBox>\{.*?\n\}\n\n// ---------------------------------------------------------------------------\n// Interstitial ads"
+banner_state_new = r'''class _BannerAdBoxState extends State<BannerAdBox>{
+  BannerAd? ad; bool loaded=false; bool failed=false;
+  @override void initState(){
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAd());
+  }
+  void _loadAd(){
+    if(!mounted) return;
+    final size=widget.large?AdSize.largeBanner:AdSize.banner;
+    ad=BannerAd(
+      size:size,adUnitId:widget.adUnitId,request:const AdRequest(),
+      listener:BannerAdListener(
+        onAdLoaded:(_){if(mounted)setState((){loaded=true;failed=false;});},
+        onAdFailedToLoad:(a,e){a.dispose();if(mounted)setState(()=>failed=true);},
+      ),
+    )..load();
+  }
+  @override void dispose(){ad?.dispose();super.dispose();}
+  @override Widget build(BuildContext context){
+    if(failed)return const SizedBox.shrink();
+    return Container(
+      height:widget.large?110:60,alignment:Alignment.center,
+      decoration:BoxDecoration(color:const Color(0xFF090F1E),border:Border.all(color:kStroke),borderRadius:BorderRadius.circular(18)),
+      child:loaded&&ad!=null
+        ?SizedBox(width:ad!.size.width.toDouble(),height:ad!.size.height.toDouble(),child:AdWidget(ad:ad!))
+        :Row(mainAxisAlignment:MainAxisAlignment.center,children:[const Icon(Icons.ads_click_rounded,color:kSub,size:17),const SizedBox(width:7),Text(widget.label.toUpperCase(),style:const TextStyle(color:kSub,fontSize:10,letterSpacing:1))])
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Interstitial ads'''
+s = re.sub(banner_state_re,banner_state_new,s,count=1,flags=re.S)
+
 # ---------------------------------------------------------------------------
 # Persistent output history
 # ---------------------------------------------------------------------------
@@ -142,17 +178,36 @@ s = s.replace(
   1
 )
 
-# Save QR image to PixLite history when the user exports it.
+# Scanner must have both top and bottom banner inventory like the other tools.
+s = s.replace(
+  "@override Widget build(BuildContext context)=>ToolShell(\n    title:widget.tr('scan'),\n    child:Column(children:[\n      CardBox",
+  "@override Widget build(BuildContext context)=>ToolShell(\n    title:widget.tr('scan'),\n    bottomAd:const CollapsibleBannerAdBox(),\n    child:Column(children:[\n      BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolTopBanner),\n      const SizedBox(height:12),\n      CardBox"
+)
+
+# Save QR image to PixLite history when the user exports it, and show the
+# success interstitial only after export (never before the user sees the QR).
+s = s.replace(
+  "class _QrScreenState extends State<QrScreen>{ final ctrl=TextEditingController(); final qrKey=GlobalKey(); String value=''; @override void dispose()",
+  "class _QrScreenState extends State<QrScreen>{ final ctrl=TextEditingController(); final qrKey=GlobalKey(); String value=''; @override void initState(){super.initState();InterstitialAdManager.preload();} @override void dispose()"
+)
 s = s.replace(
   "await file.writeAsBytes(data.buffer.asUint8List(),flush:true); await Share.shareXFiles([XFile(file.path)]);",
-  "final bytes=data.buffer.asUint8List(); await file.writeAsBytes(bytes,flush:true); await OutputStore.saveBytes(bytes,'pixlite-qr.png','PNG'); await Share.shareXFiles([XFile(file.path)]);"
+  "final bytes=data.buffer.asUint8List(); await file.writeAsBytes(bytes,flush:true); await OutputStore.saveBytes(bytes,'pixlite-qr.png','PNG'); await Share.shareXFiles([XFile(file.path)]); Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady);"
 )
+
+# Merge: show actual selected pages and allow ordering before PDF creation.
+s = s.replace(
+  "void clearAll(){ setState((){ images=[]; output=null; }); }",
+  "void clearAll(){ setState((){ images=[]; output=null; }); }\n\n  void moveImage(int from,int delta){ final to=from+delta; if(to<0||to>=images.length)return; setState((){final item=images.removeAt(from);images.insert(to,item);output=null;}); }"
+)
+merge_preview_old = "Container(height:120,width:double.infinity,alignment:Alignment.center,decoration:BoxDecoration(color:kCard2,borderRadius:BorderRadius.circular(20),border:Border.all(color:kStroke)),child:images.isEmpty?const Icon(Icons.layers_rounded,size:40,color:kSub):Text('${images.length} image(s) selected',style:const TextStyle(color:kText,fontWeight:FontWeight.w900)))"
+merge_preview_new = "Container(height:150,width:double.infinity,alignment:Alignment.center,decoration:BoxDecoration(color:kCard2,borderRadius:BorderRadius.circular(20),border:Border.all(color:kStroke)),child:images.isEmpty?const Icon(Icons.layers_rounded,size:40,color:kSub):ListView.builder(scrollDirection:Axis.horizontal,padding:const EdgeInsets.all(8),itemCount:images.length,itemBuilder:(c,i)=>Container(width:108,margin:const EdgeInsetsDirectional.only(end:8),decoration:BoxDecoration(color:kCard,borderRadius:BorderRadius.circular(13),border:Border.all(color:kStroke)),clipBehavior:Clip.antiAlias,child:Column(children:[Expanded(child:Image.memory(images[i],width:double.infinity,fit:BoxFit.cover)),Container(height:38,padding:const EdgeInsets.symmetric(horizontal:2),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[IconButton(padding:EdgeInsets.zero,constraints:const BoxConstraints(),onPressed:i>0?()=>moveImage(i,-1):null,icon:const Icon(Icons.chevron_left_rounded,size:19)),Text('${i+1}',style:const TextStyle(color:kText,fontSize:10,fontWeight:FontWeight.w900)),IconButton(padding:EdgeInsets.zero,constraints:const BoxConstraints(),onPressed:i<images.length-1?()=>moveImage(i,1):null,icon:const Icon(Icons.chevron_right_rounded,size:19))]))])))"
+s = s.replace(merge_preview_old,merge_preview_new)
 
 # ---------------------------------------------------------------------------
 # Files + Settings screens
 # ---------------------------------------------------------------------------
 s = s.replace("home(),const FilesScreen(),SettingsScreen(lang:widget.lang,onLang:widget.onLang)", "home(),FilesScreen(tr:widget.tr),SettingsScreen(lang:widget.lang,onLang:widget.onLang,tr:widget.tr)")
-s = s.replace("home(),FilesScreen(tr:widget.tr),SettingsScreen(lang:widget.lang,onLang:widget.onLang,tr:widget.tr)", "home(),FilesScreen(tr:widget.tr),SettingsScreen(lang:widget.lang,onLang:widget.onLang,tr:widget.tr)")
 
 files_block = r"class FilesScreen extends StatelessWidget\{.*?\n\}\nclass SettingsScreen"
 files_new = r'''class FilesScreen extends StatelessWidget{
@@ -211,4 +266,4 @@ class _SettingTile'''
 s = re.sub(settings_block, settings_new, s, count=1, flags=re.S)
 
 p.write_text(s)
-print('PixLite post-patch applied: localization, branding, persistent Files history, ads.')
+print('PixLite post-patch applied: localization, branding, persistent Files history, full tool ads, QR interstitial, merge ordering.')
