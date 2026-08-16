@@ -283,3 +283,15 @@ jobs:
         with:
           name: pixlite-production-release-build
           path: release_files/*
+
+      # Lightweight, phone-testing-only artifact: just the arm64-v8a release
+      # APK (~28 MB), separate from the full build artifact above (which
+      # bundles the debug APK, all per-ABI APKs, the AAB, and the size
+      # report and can run past 200 MB). Real-device testers only ever need
+      # this one file, so this avoids making them download everything else
+      # just to install the app.
+      - name: Upload phone-test APK artifact (arm64 only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-phone-test-apk-arm64
+          path: release_files/PixLite-production-release-arm64-v8a.apk
