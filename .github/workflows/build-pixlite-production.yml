@@ -1,4 +1,4 @@
-name: Build PixLite Production
+name: Build PixLite Phone Test
 
 on:
   workflow_dispatch:
@@ -104,11 +104,7 @@ jobs:
           ''')
 
           proguard = Path("android/app/proguard-rules.pro")
-          proguard.write_text('''# Conservative keep rules for R8 in release builds.
-          -keep class io.flutter.app.** { *; }
-          -keep class io.flutter.plugin.** { *; }
-          -keep class io.flutter.util.** { *; }
-          -keep class io.flutter.view.** { *; }
+          proguard.write_text('''
           -keep class io.flutter.** { *; }
           -keep class io.flutter.plugins.** { *; }
           -keep class com.google.mlkit.** { *; }
@@ -121,7 +117,7 @@ jobs:
           ''')
           PY
 
-      - name: Generate high-quality launcher icon and splash
+      - name: Generate launcher icon and splash
         working-directory: pixlite_production
         run: |
           python3 -m pip install pillow
@@ -189,54 +185,21 @@ jobs:
 
       - name: Analyze source
         working-directory: pixlite_production
-        run: flutter analyze --no-fatal-infos || true
+        run: flutter analyze --no-fatal-infos
 
-      - name: Build debug APK (before-size baseline)
+      - name: Build arm64 release APK only
         working-directory: pixlite_production
-        run: flutter build apk --debug
+        run: flutter build apk --release --target-platform android-arm64
 
-      - name: Build release APK (universal)
-        working-directory: pixlite_production
-        run: flutter build apk --release
-
-      - name: Build release APK (split per ABI)
-        working-directory: pixlite_production
-        run: flutter build apk --release --split-per-abi
-
-      - name: Build release AAB
-        working-directory: pixlite_production
-        run: flutter build appbundle --release
-
-      - name: Size analysis
-        working-directory: pixlite_production
-        run: |
-          set -e
-          REPORT=size_report.txt
-          {
-            echo "=== File sizes ==="
-            ls -la build/app/outputs/flutter-apk/*.apk build/app/outputs/bundle/release/*.aab 2>/dev/null
-          } | tee "$REPORT"
-
-      - name: Prepare artifacts
+      - name: Prepare phone-test artifact
         run: |
           mkdir -p release_files
-          cp pixlite_production/build/app/outputs/flutter-apk/app-debug.apk release_files/PixLite-production-debug.apk
-          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-production-release-universal.apk
-          cp pixlite_production/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk release_files/PixLite-production-release-arm64-v8a.apk || true
-          cp pixlite_production/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk release_files/PixLite-production-release-armeabi-v7a.apk || true
-          cp pixlite_production/build/app/outputs/flutter-apk/app-x86_64-release.apk release_files/PixLite-production-release-x86_64.apk || true
-          cp pixlite_production/build/app/outputs/bundle/release/app-release.aab release_files/PixLite-production-release.aab
-          cp pixlite_production/size_report.txt release_files/size_report.txt
-          ls -la release_files/
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk \
+            release_files/PixLite-phone-test-arm64.apk
+          ls -lh release_files/PixLite-phone-test-arm64.apk
 
-      - name: Upload APK/AAB artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixlite-production-release-build
-          path: release_files/*
-
-      - name: Upload phone-test APK artifact (arm64 only)
+      - name: Upload phone-test APK
         uses: actions/upload-artifact@v4
         with:
           name: pixlite-phone-test-apk-arm64
-          path: release_files/PixLite-production-release-arm64-v8a.apk
+          path: release_files/PixLite-phone-test-arm64.apk
