@@ -254,7 +254,23 @@ class _SettingTile extends StatelessWidget{final IconData icon;final String titl
 class MiniPill extends StatelessWidget{ final String text; final Color color; const MiniPill(this.text,this.color,{super.key}); @override Widget build(BuildContext context)=>Container(padding: const EdgeInsets.symmetric(horizontal:11,vertical:7), decoration:BoxDecoration(color:color.withOpacity(.12),borderRadius:BorderRadius.circular(99),border:Border.all(color:color.withOpacity(.35))), child:Text(text,style:TextStyle(color:color,fontSize:10,fontWeight:FontWeight.w900))); }
 class ToolData { final String title,subtitle; final IconData icon; final Color color; final Widget page; const ToolData(this.title,this.subtitle,this.icon,this.color,this.page); }
 
-class ToolShell extends StatelessWidget { final String title; final Widget child; const ToolShell({super.key, required this.title, required this.child}); @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(title,style: const TextStyle(fontWeight:FontWeight.w900))), body:SafeArea(child:ListView(padding: const EdgeInsets.fromLTRB(18,8,18,26),children:[child]))); }
+class ToolShell extends StatelessWidget {
+  final String title; final Widget child; final Widget? bottomAd;
+  const ToolShell({super.key, required this.title, required this.child, this.bottomAd});
+  // The tool content lives in an Expanded ListView, so it always scrolls
+  // normally and nothing above it can ever be pushed off-screen. bottomAd
+  // (when given) sits below that in its own fixed footer strip, the same
+  // pattern already used for Home's bottom banner above the nav bar -- it
+  // occupies zero height until CollapsibleBannerAdBox actually has an ad
+  // loaded, so a short screen with no ad just looks like it does today.
+  @override Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:Text(title,style: const TextStyle(fontWeight:FontWeight.w900))),
+    body:SafeArea(child:Column(children:[
+      Expanded(child:ListView(padding: const EdgeInsets.fromLTRB(18,8,18,26),children:[child])),
+      if(bottomAd!=null) Padding(padding:const EdgeInsets.fromLTRB(18,0,18,10),child:bottomAd!),
+    ])),
+  );
+}
 class CardBox extends StatelessWidget{ final Widget child; const CardBox({super.key, required this.child}); @override Widget build(BuildContext context)=>Container(padding: const EdgeInsets.all(15), decoration:BoxDecoration(color:kCard,border:Border.all(color:kStroke),borderRadius:BorderRadius.circular(24)), child:child); }
 
 abstract class ImageToolState<T extends StatefulWidget> extends State<T> {
@@ -268,6 +284,31 @@ class PickerPanel extends StatelessWidget { final String Function(String) tr; fi
   const SizedBox(height:12), Row(children:[Expanded(child:OutlinedButton.icon(onPressed:gallery,icon: const Icon(Icons.photo_library_outlined),label:Text(tr('gallery')))), const SizedBox(width:8), Expanded(child:OutlinedButton.icon(onPressed:camera,icon: const Icon(Icons.photo_camera_outlined),label:Text(tr('camera'))))])
 ])); }
 class ResultAd extends StatelessWidget { final bool show; final String label; const ResultAd({super.key,required this.show,required this.label}); @override Widget build(BuildContext context)=>show?Padding(padding: const EdgeInsets.only(top:14),child:BannerAdBox(label:label)): const SizedBox.shrink(); }
+
+// A banner slot that takes up no space at all until an ad has actually
+// loaded -- unlike BannerAdBox, it never shows a placeholder box. Used to
+// fill leftover vertical space at the bottom of short tool screens: if the
+// ad fails to load, this stays fully collapsed and the layout below it
+// just closes up, instead of leaving a visible empty ad box.
+class CollapsibleBannerAdBox extends StatefulWidget {
+  const CollapsibleBannerAdBox({super.key});
+  @override State<CollapsibleBannerAdBox> createState()=>_CollapsibleBannerAdBoxState();
+}
+class _CollapsibleBannerAdBoxState extends State<CollapsibleBannerAdBox>{
+  BannerAd? ad; bool loaded=false;
+  @override void initState(){
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAd());
+  }
+  void _loadAd(){
+    if(!mounted) return;
+    ad=BannerAd(size:AdSize.banner,adUnitId:AdIds.banner,listener:BannerAdListener(onAdLoaded:(_){if(mounted)setState(()=>loaded=true);},onAdFailedToLoad:(a,e)=>a.dispose()),request:const AdRequest())..load();
+  }
+  @override void dispose(){ad?.dispose();super.dispose();}
+  @override Widget build(BuildContext context)=>loaded&&ad!=null
+    ?Center(child:SizedBox(width:ad!.size.width.toDouble(),height:ad!.size.height.toDouble(),child:AdWidget(ad:ad!)))
+    :const SizedBox.shrink();
+}
 
 // ---------------------------------------------------------------------------
 // Image/PDF processing helpers. These run synchronously on the main isolate
@@ -354,7 +395,7 @@ class _CompressScreenState extends ImageToolState<CompressScreen>{
   double quality=.82;
   @override void initState(){ super.initState(); InterstitialAdManager.preload(); }
   Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); await Future.delayed(const Duration(milliseconds:50)); try{ final result=_compressImage(data,(quality*100).round()); if(!mounted)return; setState(()=>output=result); showMsg('Image compressed successfully'); Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady); }catch(e){showMsg('Compress failed: $e');}finally{if(mounted)setState(()=>busy=false);} }
-  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('compress'), child:Column(children:[BannerAdBox(label:widget.tr('ad')), const SizedBox(height:12), PickerPanel(tr:widget.tr,bytes:output??input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12), CardBox(child:Column(children:[Row(children:[Text(widget.tr('quality'),style: const TextStyle(color:kText,fontWeight:FontWeight.w800)),const Spacer(),Text('${(quality*100).round()}%',style: const TextStyle(color:kSub))]), Slider(value:quality,min:.25,max:1,activeColor:kViolet,onChanged:(v)=>setState(()=>quality=v)), if(output!=null)Padding(padding: const EdgeInsets.only(bottom:8), child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('${widget.tr('before')} ${(input!.length/1024).round()} KB',style: const TextStyle(fontSize:11,color:kSub)), Text('${widget.tr('after')} ${(output!.length/1024).round()} KB',style: const TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:kMint))])), FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('process'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite-compressed.jpg'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
+  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('compress'), bottomAd:const CollapsibleBannerAdBox(), child:Column(children:[BannerAdBox(label:widget.tr('ad')), const SizedBox(height:12), PickerPanel(tr:widget.tr,bytes:output??input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12), CardBox(child:Column(children:[Row(children:[Text(widget.tr('quality'),style: const TextStyle(color:kText,fontWeight:FontWeight.w800)),const Spacer(),Text('${(quality*100).round()}%',style: const TextStyle(color:kSub))]), Slider(value:quality,min:.25,max:1,activeColor:kViolet,onChanged:(v)=>setState(()=>quality=v)), if(output!=null)Padding(padding: const EdgeInsets.only(bottom:8), child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('${widget.tr('before')} ${(input!.length/1024).round()} KB',style: const TextStyle(fontSize:11,color:kSub)), Text('${widget.tr('after')} ${(output!.length/1024).round()} KB',style: const TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:kMint))])), FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('process'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite-compressed.jpg'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
 }
 
 class ResizeScreen extends StatefulWidget{ final String Function(String) tr; const ResizeScreen({super.key,required this.tr}); @override State<ResizeScreen> createState()=>_ResizeScreenState(); }
@@ -364,7 +405,7 @@ class _ResizeScreenState extends ImageToolState<ResizeScreen>{ final w=TextEditi
   @override Future<void> choose(ImageSource source) async{ await super.choose(source); final d=img.decodeImage(input??Uint8List(0)); if(d!=null){ ratio=d.width/d.height; w.text=d.width.toString(); h.text=d.height.toString(); setState((){}); } }
   void syncHeight(String value){ if(!keepRatio||ratio==0)return; final width=int.tryParse(value); if(width==null||width<1)return; h.text=(width/ratio).round().toString(); }
   Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); await Future.delayed(const Duration(milliseconds:50)); try{ final nw=int.tryParse(w.text)??0; final nh=int.tryParse(h.text)??0; final result=_resizeImage(data,nw.clamp(1,10000),nh.clamp(1,10000)); if(!mounted)return; setState(()=>output=result); showMsg('Image resized successfully'); Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady); }catch(e){showMsg('Resize failed: $e');}finally{if(mounted)setState(()=>busy=false);} }
-  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('resize'), child:Column(children:[BannerAdBox(label:widget.tr('ad')), const SizedBox(height:12), PickerPanel(tr:widget.tr,bytes:output??input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12),CardBox(child:Column(children:[Row(children:[Expanded(child:TextField(controller:w,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:widget.tr('width')),onChanged:syncHeight)),const SizedBox(width:8),Expanded(child:TextField(controller:h,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:widget.tr('height'))))]), const SizedBox(height:8), SwitchListTile(contentPadding:EdgeInsets.zero,value:keepRatio,activeColor:kMint,onChanged:(v)=>setState(()=>keepRatio=v),title:Text(widget.tr('keep_ratio'),style: const TextStyle(color:kText,fontWeight:FontWeight.w700))), FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('process'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite-resized.jpg'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
+  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('resize'), bottomAd:const CollapsibleBannerAdBox(), child:Column(children:[BannerAdBox(label:widget.tr('ad')), const SizedBox(height:12), PickerPanel(tr:widget.tr,bytes:output??input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12),CardBox(child:Column(children:[Row(children:[Expanded(child:TextField(controller:w,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:widget.tr('width')),onChanged:syncHeight)),const SizedBox(width:8),Expanded(child:TextField(controller:h,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:widget.tr('height'))))]), const SizedBox(height:8), SwitchListTile(contentPadding:EdgeInsets.zero,value:keepRatio,activeColor:kMint,onChanged:(v)=>setState(()=>keepRatio=v),title:Text(widget.tr('keep_ratio'),style: const TextStyle(color:kText,fontWeight:FontWeight.w700))), FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('process'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite-resized.jpg'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
 }
 
 
@@ -557,7 +598,7 @@ class ImageToPdfScreen extends StatefulWidget{ final String Function(String) tr;
 class _ImageToPdfScreenState extends ImageToolState<ImageToPdfScreen>{
   @override void initState(){ super.initState(); InterstitialAdManager.preload(); }
   Future<void> process() async{ final data=input; if(data==null)return; setState(()=>busy=true); await Future.delayed(const Duration(milliseconds:50)); try{ final pdfBytes=await _mergeImagesToPdf([data]); if(!mounted)return; setState(()=>output=pdfBytes); showMsg('PDF created successfully'); Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady); }catch(e){showMsg('PDF creation failed: $e');}finally{if(mounted)setState(()=>busy=false);} }
-  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('pdf'), child:Column(children:[BannerAdBox(label:widget.tr('ad')), const SizedBox(height:12), PickerPanel(tr:widget.tr,bytes:input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12),CardBox(child:Column(children:[FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('create_pdf'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite.pdf'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
+  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('pdf'), bottomAd:const CollapsibleBannerAdBox(), child:Column(children:[BannerAdBox(label:widget.tr('ad')), const SizedBox(height:12), PickerPanel(tr:widget.tr,bytes:input,gallery:()=>choose(ImageSource.gallery),camera:()=>choose(ImageSource.camera)), if(input!=null)...[const SizedBox(height:12),CardBox(child:Column(children:[FilledButton(onPressed:busy?null:process,child:Text(busy?'...':widget.tr('create_pdf'))), if(output!=null)OutlinedButton(onPressed:()=>shareBytes(output!,'pixlite.pdf'),child:Text(widget.tr('save_share')))])), ResultAd(show:output!=null,label:widget.tr('after_result_ad'))]]));
 }
 
 class MergeScreen extends StatefulWidget{ final String Function(String) tr; const MergeScreen({super.key,required this.tr}); @override State<MergeScreen> createState()=>_MergeScreenState(); }
@@ -613,7 +654,7 @@ class _MergeScreenState extends State<MergeScreen>{
 
   void showMsg(String msg){ if(!mounted)return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(msg))); }
 
-  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('merge'), child:Column(children:[
+  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('merge'), bottomAd:const CollapsibleBannerAdBox(), child:Column(children:[
     BannerAdBox(label:widget.tr('ad')),
     const SizedBox(height:12),
     CardBox(child:Column(children:[
@@ -636,5 +677,5 @@ class _MergeScreenState extends State<MergeScreen>{
 class QrScreen extends StatefulWidget{ final String Function(String) tr; const QrScreen({super.key,required this.tr}); @override State<QrScreen> createState()=>_QrScreenState(); }
 class _QrScreenState extends State<QrScreen>{ final ctrl=TextEditingController(); final qrKey=GlobalKey(); String value=''; @override void dispose(){ctrl.dispose(); super.dispose();}
   Future<void> shareQr() async{ try{ final boundary=qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?; if(boundary==null)return; final image=await boundary.toImage(pixelRatio:3); final data=await image.toByteData(format:ui.ImageByteFormat.png); if(data==null)return; final dir=await getTemporaryDirectory(); final file=File('${dir.path}/pixlite-qr.png'); await file.writeAsBytes(data.buffer.asUint8List(),flush:true); await Share.shareXFiles([XFile(file.path)]); }catch(_){} }
-  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('qr'), child:Column(children:[BannerAdBox(label:widget.tr('ad')), const SizedBox(height:12), CardBox(child:Column(children:[TextField(controller:ctrl,decoration:InputDecoration(labelText:widget.tr('text_link'))), const SizedBox(height:14), FilledButton(onPressed:()=>setState(()=>value=ctrl.text.trim()),child:Text(widget.tr('generate_qr'))), if(value.isNotEmpty)...[const SizedBox(height:22), RepaintBoundary(key:qrKey,child:Container(padding: const EdgeInsets.all(18),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(20)), child:QrImageView(data:value,version:QrVersions.auto,size:220))), const SizedBox(height:12), OutlinedButton(onPressed:shareQr,child:Text(widget.tr('save_share')))] ])), ResultAd(show:value.isNotEmpty,label:widget.tr('after_result_ad'))]));
+  @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('qr'), bottomAd:const CollapsibleBannerAdBox(), child:Column(children:[BannerAdBox(label:widget.tr('ad')), const SizedBox(height:12), CardBox(child:Column(children:[TextField(controller:ctrl,decoration:InputDecoration(labelText:widget.tr('text_link'))), const SizedBox(height:14), FilledButton(onPressed:()=>setState(()=>value=ctrl.text.trim()),child:Text(widget.tr('generate_qr'))), if(value.isNotEmpty)...[const SizedBox(height:22), RepaintBoundary(key:qrKey,child:Container(padding: const EdgeInsets.all(18),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(20)), child:QrImageView(data:value,version:QrVersions.auto,size:220))), const SizedBox(height:12), OutlinedButton(onPressed:shareQr,child:Text(widget.tr('save_share')))] ])), ResultAd(show:value.isNotEmpty,label:widget.tr('after_result_ad'))]));
 }
