@@ -63,7 +63,7 @@ jobs:
           admob = '''
                   <meta-data
                       android:name="com.google.android.gms.ads.APPLICATION_ID"
-                      android:value="ca-app-pub-3940256099942544~3347511713"/>
+                      android:value="ca-app-pub-8892609279215644~8049200739"/>
           '''
           if "com.google.android.gms.ads.APPLICATION_ID" not in text:
               text = text.replace("<activity", admob + "\n        <activity", 1)
