@@ -1,4 +1,4 @@
-name: Build PixLite TEST 24
+name: Build PixLite TEST 25
 
 on:
   workflow_dispatch:
@@ -8,6 +8,9 @@ on:
     paths:
       - "pixlite_production/**"
       - ".github/workflows/build-pixlite-production.yml"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -36,15 +39,31 @@ jobs:
           flutter --version
           flutter pub get
 
-      - name: Apply and VERIFY PixLite TEST 24 source
+      - name: Apply and VERIFY PixLite TEST 25 source
         working-directory: pixlite_production
         run: |
           python3 tooling/pixlite_post_patch.py
           python3 tooling/pixlite_build_fix.py
           python3 tooling/pixlite_ci_verify.py
-          grep -n "PDF & Document Tools • TEST 24" lib/main.dart
+          grep -n "PDF & Document Tools • TEST 25" lib/main.dart
+          grep -n "Image.asset('assets/pixlite_icon.png'" lib/main.dart
+          grep -n "AdIds.homeTopBanner" lib/main.dart
+          grep -n "AdIds.homeInlineBanner" lib/main.dart
+          grep -n "AdIds.homeBottomBanner" lib/main.dart
           grep -n "class OutputStore" lib/main.dart
           grep -n "FutureBuilder<List<SavedOutput>>" lib/main.dart
+
+      - name: Persist verified TEST 25 app source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pixlite_production/lib/main.dart
+          if ! git diff --cached --quiet; then
+            git commit -m "Persist verified PixLite TEST 25 source [skip ci]"
+            git push
+          else
+            echo "Verified source already persisted."
+          fi
 
       - name: Create Android shell
         working-directory: pixlite_production
@@ -66,8 +85,8 @@ jobs:
           '''
           if "android.permission.INTERNET" not in text:
               text = text.replace(head, head + perms)
-          text = text.replace('android:label="pixlite"', 'android:label="PixLite TEST 24"')
-          text = text.replace('android:label="pixlite_production"', 'android:label="PixLite TEST 24"')
+          text = text.replace('android:label="pixlite"', 'android:label="PixLite TEST 25"')
+          text = text.replace('android:label="pixlite_production"', 'android:label="PixLite TEST 25"')
           admob = '''
                   <meta-data
                       android:name="com.google.android.gms.ads.APPLICATION_ID"
@@ -146,19 +165,19 @@ jobs:
         working-directory: pixlite_production
         run: flutter analyze lib --no-fatal-infos
 
-      - name: Build uniquely versioned TEST 24 arm64 APK
+      - name: Build uniquely versioned TEST 25 arm64 APK
         working-directory: pixlite_production
-        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.24 --build-number=24
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.25 --build-number=25
 
-      - name: Prepare TEST 24 artifact
+      - name: Prepare TEST 25 artifact
         run: |
           mkdir -p release_files
-          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-24-arm64.apk
-          sha256sum release_files/PixLite-TEST-24-arm64.apk
-          ls -lh release_files/PixLite-TEST-24-arm64.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-25-arm64.apk
+          sha256sum release_files/PixLite-TEST-25-arm64.apk
+          ls -lh release_files/PixLite-TEST-25-arm64.apk
 
-      - name: Upload TEST 24 APK
+      - name: Upload TEST 25 APK
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-TEST-24-arm64
-          path: release_files/PixLite-TEST-24-arm64.apk
+          name: pixlite-TEST-25-arm64
+          path: release_files/PixLite-TEST-25-arm64.apk
