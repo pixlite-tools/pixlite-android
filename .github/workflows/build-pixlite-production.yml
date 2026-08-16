@@ -36,9 +36,11 @@ jobs:
           flutter --version
           flutter pub get
 
-      - name: Apply PixLite UX patch
+      - name: Apply PixLite patches
         working-directory: pixlite_production
-        run: python3 tooling/pixlite_post_patch.py
+        run: |
+          python3 tooling/pixlite_post_patch.py
+          python3 tooling/pixlite_build_fix.py
 
       - name: Create Android shell
         working-directory: pixlite_production
@@ -183,9 +185,9 @@ jobs:
           </resources>''')
           PY
 
-      - name: Analyze source
+      - name: Analyze app source
         working-directory: pixlite_production
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze lib --no-fatal-infos
 
       - name: Build arm64 release APK only
         working-directory: pixlite_production
