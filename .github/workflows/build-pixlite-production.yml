@@ -67,7 +67,8 @@ jobs:
           head='<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
           if 'android.permission.INTERNET' not in text:
             text=text.replace(head,head+'\n<uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>')
-          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 28").replace('android:label="pixlite_production"','android:label="PixLite TEST 28")
+          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 28"')
+          text=text.replace('android:label="pixlite_production"','android:label="PixLite TEST 28"')
           admob='<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-8892609279215644~8049200739"/>'
           if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
             text=text.replace('<activity',admob+'\n        <activity',1)
@@ -90,7 +91,6 @@ jobs:
           d=ImageDraw.Draw(im)
           orange=(255,133,0,255); orange2=(255,164,45,255); dark=(9,14,29,255)
           d.rounded_rectangle((86,86,938,938),radius=230,fill=dark,outline=orange,width=46)
-          # Distinct PixLite P: open stem + rounded bowl + speed cut.
           d.rounded_rectangle((250,220,380,805),radius=58,fill=orange)
           d.rounded_rectangle((310,220,760,585),radius=170,fill=orange)
           d.rounded_rectangle((400,330,640,475),radius=70,fill=dark)
