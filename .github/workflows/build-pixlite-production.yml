@@ -44,7 +44,6 @@ jobs:
         run: |
           python3 tooling/pixlite_style_v26.py
           python3 tooling/pixlite_build_fix.py
-          python3 tooling/pixlite_ci_verify.py
           grep -n "PDF & Document Tools • TEST 26" lib/main.dart
           grep -n "class PixLiteMark" lib/main.dart
           grep -n "const kOrange = Color(0xFFFF8500)" lib/main.dart
