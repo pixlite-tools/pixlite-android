@@ -115,7 +115,7 @@ class _PixLiteAppState extends State<PixLiteApp> {
           appBarTheme: const AppBarTheme(backgroundColor:kBg, surfaceTintColor:Colors.transparent, foregroundColor:kText),
           filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(backgroundColor:kViolet, foregroundColor:Colors.white, minimumSize: const Size.fromHeight(54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)))),
           outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(foregroundColor:kText, side: const BorderSide(color:kStroke), minimumSize: const Size.fromHeight(48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)))),
-          inputDecorationTheme: InputDecorationTheme(filled:true, fillColor:kCard2, labelStyle: const TextStyle(color:kSub), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kStroke)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kStroke)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kViolet))),
+          inputDecorationTheme: InputDecorationTheme(filled:true, fillColor:kCard2, labelStyle: const TextStyle(color:kSub), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kStroke)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kStroke)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kOrange))),
         ),
         home: HomeScreen(lang: lang, tr: tr, onLang: setLang),
       ),
@@ -281,21 +281,26 @@ class PixLiteMark extends StatelessWidget {
   final double size;
   const PixLiteMark({super.key,this.size=44});
   @override Widget build(BuildContext context)=>Container(
-    width:size,height:size,padding:const EdgeInsets.all(2),
+    width:size,height:size,
     decoration:BoxDecoration(
-      gradient:const LinearGradient(colors:[kOrange,kPink,kViolet,kBlue],begin:Alignment.topLeft,end:Alignment.bottomRight),
+      color:const Color(0xFF08101F),
       borderRadius:BorderRadius.circular(size*.25),
-      boxShadow:[BoxShadow(color:kOrange.withOpacity(.16),blurRadius:16,spreadRadius:1)]
+      border:Border.all(color:kOrange,width:2),
+      boxShadow:[BoxShadow(color:kOrange.withOpacity(.16),blurRadius:14)]
     ),
-    child:Container(
-      decoration:BoxDecoration(color:const Color(0xFF090E1D),borderRadius:BorderRadius.circular(size*.21)),
-      alignment:Alignment.center,
-      child:ShaderMask(
-        shaderCallback:(r)=>const LinearGradient(colors:[Color(0xFFB934FF),Color(0xFF6F49FF),kOrange]).createShader(r),
-        child:Text('P',style:TextStyle(color:Colors.white,fontSize:size*.62,fontWeight:FontWeight.w900,height:1,letterSpacing:-2))
-      )
-    )
+    child:CustomPaint(painter:_PixLiteLogoPainter())
   );
+}
+class _PixLiteLogoPainter extends CustomPainter {
+  @override void paint(Canvas c,Size z){
+    final p=Paint()..color=kOrange..style=PaintingStyle.stroke..strokeWidth=z.width*.105..strokeCap=StrokeCap.round..strokeJoin=StrokeJoin.round;
+    final x=z.width*.29,y=z.height*.23,w=z.width*.43,h=z.height*.24;
+    final path=Path()..moveTo(x,z.height*.73)..lineTo(x,y)..lineTo(x+w,y)..quadraticBezierTo(z.width*.78,y,z.width*.78,y+h*.48)..quadraticBezierTo(z.width*.78,y+h,x+w,y+h)..lineTo(x,z.height*.47);
+    c.drawPath(path,p);
+    final p2=Paint()..color=const Color(0xFFFFA033)..style=PaintingStyle.stroke..strokeWidth=z.width*.055..strokeCap=StrokeCap.round;
+    c.drawLine(Offset(z.width*.38,z.height*.37),Offset(z.width*.64,z.height*.37),p2);
+  }
+  @override bool shouldRepaint(covariant CustomPainter oldDelegate)=>false;
 }
 
 class HomeScreen extends StatefulWidget{
@@ -317,12 +322,12 @@ class _HomeScreenState extends State<HomeScreen>{
       ToolData(tr('qr'),tr('qr_sub'),Icons.qr_code_2_rounded,kOrange,QrScreen(tr:tr)),
     ];
     return ListView(padding:const EdgeInsets.fromLTRB(16,10,16,22),children:[
-      Row(children:[Expanded(child:Row(children:[const PixLiteMark(size:44),const SizedBox(width:10),const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('PixLite',style:TextStyle(color:kText,fontSize:27,fontWeight:FontWeight.w900,letterSpacing:-1)),SizedBox(height:1),Text('PDF & Document Tools • TEST 26',style:TextStyle(color:kOrange,fontSize:10.5,fontWeight:FontWeight.w800,letterSpacing:.2))])])),PopupMenuButton<String>(initialValue:widget.lang,color:kCard2,onSelected:widget.onLang,itemBuilder:(_)=>langNames.entries.map((e)=>PopupMenuItem(value:e.key,child:Text(e.value))).toList(),child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),decoration:BoxDecoration(color:kCard,borderRadius:BorderRadius.circular(14),border:Border.all(color:kStroke)),child:Row(mainAxisSize:MainAxisSize.min,children:[Text(widget.lang.toUpperCase(),style:const TextStyle(color:kText,fontSize:12,fontWeight:FontWeight.w800)),const Icon(Icons.keyboard_arrow_down_rounded,color:kSub,size:17)]))) ]),
+      Row(children:[Expanded(child:Row(children:[const PixLiteMark(size:50),const SizedBox(width:11),const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('PixLite',style:TextStyle(color:kText,fontSize:27,fontWeight:FontWeight.w900,letterSpacing:-1)),SizedBox(height:1),Text('PDF & Document Tools • TEST 27',style:TextStyle(color:kOrange,fontSize:10.5,fontWeight:FontWeight.w800,letterSpacing:.2))])])),PopupMenuButton<String>(initialValue:widget.lang,color:kCard2,onSelected:widget.onLang,itemBuilder:(_)=>langNames.entries.map((e)=>PopupMenuItem(value:e.key,child:Text(e.value))).toList(),child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),decoration:BoxDecoration(color:kCard,borderRadius:BorderRadius.circular(14),border:Border.all(color:kStroke)),child:Row(mainAxisSize:MainAxisSize.min,children:[Text(widget.lang.toUpperCase(),style:const TextStyle(color:kText,fontSize:12,fontWeight:FontWeight.w800)),const Icon(Icons.keyboard_arrow_down_rounded,color:kSub,size:17)]))) ]),
       const SizedBox(height:12),
       BannerAdBox(label:tr('ad'),adUnitId:AdIds.homeTopBanner),
       const SizedBox(height:12),
       Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(borderRadius:BorderRadius.circular(26),border:Border.all(color:kOrange.withOpacity(.58),width:1.15),gradient:const LinearGradient(colors:[Color(0xFF181044),Color(0xFF2B1674),Color(0xFF053D72)],begin:Alignment.topLeft,end:Alignment.bottomRight),boxShadow:const [BoxShadow(color:Color(0x553E2BFF),blurRadius:30,offset:Offset(0,12))]),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Row(children:[Container(width:58,height:58,decoration:BoxDecoration(borderRadius:BorderRadius.circular(18),gradient:const LinearGradient(colors:[kOrange,Color(0xFFB52CFF),Color(0xFF2A6BFF)]),border:Border.all(color:kOrange.withOpacity(.75),width:1.0)),child:const Icon(Icons.picture_as_pdf_rounded,color:Colors.white,size:31)),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(tr('home_hero1'),style:TextStyle(color:Colors.white,fontSize:24,fontWeight:FontWeight.w900,height:1)),SizedBox(height:4),Text(tr('home_hero2'),style:TextStyle(color:Colors.white,fontSize:24,fontWeight:FontWeight.w900,height:1)),SizedBox(height:8),Text(tr('home_hero_sub'),style:TextStyle(color:Color(0xFFD5DAFF),fontSize:11.5))]))]),
+        Row(children:[Container(width:58,height:58,decoration:BoxDecoration(borderRadius:BorderRadius.circular(18),gradient:const LinearGradient(colors:[kOrange,Color(0xFFFFA033),Color(0xFFB52CFF)]),border:Border.all(color:kOrange,width:1.2)),child:const Icon(Icons.picture_as_pdf_rounded,color:Colors.white,size:31)),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(tr('home_hero1'),style:TextStyle(color:Colors.white,fontSize:24,fontWeight:FontWeight.w900,height:1)),SizedBox(height:4),Text(tr('home_hero2'),style:TextStyle(color:Colors.white,fontSize:24,fontWeight:FontWeight.w900,height:1)),SizedBox(height:8),Text(tr('home_hero_sub'),style:TextStyle(color:Color(0xFFD5DAFF),fontSize:11.5))]))]),
         const SizedBox(height:18),
         Container(decoration:BoxDecoration(gradient:const LinearGradient(colors:[Color(0xFFC72EF3),Color(0xFF6D35FF),Color(0xFF009CF6)]),borderRadius:BorderRadius.circular(16),boxShadow:const [BoxShadow(color:Color(0x553C7CFF),blurRadius:18)]),child:FilledButton.icon(onPressed:()=>open(ImageToPdfScreen(tr:tr)),style:FilledButton.styleFrom(backgroundColor:Colors.transparent,shadowColor:Colors.transparent,minimumSize:const Size.fromHeight(56)),icon:const Icon(Icons.picture_as_pdf_rounded),label:Text(tr('create_pdf'),style:TextStyle(fontWeight:FontWeight.w900)))),
         const SizedBox(height:10),OutlinedButton.icon(onPressed:()=>open(ScanScreen(tr:tr)),style:OutlinedButton.styleFrom(side:BorderSide(color:kOrange.withOpacity(.72),width:1.1),foregroundColor:kText),icon:const Icon(Icons.document_scanner_rounded,color:kOrange),label:Text(tr('scan_document'),style:const TextStyle(fontWeight:FontWeight.w800)))
@@ -339,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen>{
       // Anchored above the nav bar, visible on Home only -- Files/Settings
       // stay ad-free rather than carrying an ad onto every screen.
       if(tab==0) Padding(padding:const EdgeInsets.fromLTRB(12,8,12,0),child:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.homeBottomBanner)),
-      NavigationBar(height:70,backgroundColor:const Color(0xFF080D19),indicatorColor:kOrange.withOpacity(.20),selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:[NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home_rounded),label:widget.tr('home')),NavigationDestination(icon:Icon(Icons.folder_outlined),selectedIcon:Icon(Icons.folder_rounded),label:widget.tr('files')),NavigationDestination(icon:Icon(Icons.settings_outlined),selectedIcon:Icon(Icons.settings_rounded),label:widget.tr('settings'))]),
+      NavigationBar(height:70,backgroundColor:const Color(0xFF080D19),indicatorColor:kOrange.withOpacity(.20),selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:[NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home_rounded,color:kOrange),label:widget.tr('home')),NavigationDestination(icon:Icon(Icons.folder_outlined),selectedIcon:Icon(Icons.folder_rounded,color:kOrange),label:widget.tr('files')),NavigationDestination(icon:Icon(Icons.settings_outlined),selectedIcon:Icon(Icons.settings_rounded,color:kOrange),label:widget.tr('settings'))]),
     ]),
   );
 }
