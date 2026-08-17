@@ -1,0 +1,156 @@
+name: Build PixLite TEST 34
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - pixlite/test29-no-shrink
+    paths:
+      - "pixlite_production/**"
+      - ".github/workflows/build-pixlite-test34.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        working-directory: pixlite_production
+        run: flutter pub get
+
+      - name: Generate approved current PixLite brand asset
+        working-directory: pixlite_production
+        run: |
+          python3 -m pip install pillow
+          python3 tooling/pixlite_icon_v30.py
+
+      - name: Apply TEST 34 source
+        working-directory: pixlite_production
+        run: |
+          python3 tooling/pixlite_style_v30.py
+          python3 tooling/pixlite_theme_v31.py
+          python3 tooling/pixlite_privacy_v33.py
+          python3 tooling/pixlite_back_v34.py
+          python3 tooling/pixlite_build_fix.py
+          grep -n "PDF & Document Tools • TEST 34" lib/main.dart
+          grep -n "Press back again to exit" lib/main.dart
+          grep -n "SystemNavigator.pop()" lib/main.dart
+          grep -n "PrivacyScreen(lang:lang,tr:tr)" lib/main.dart
+          grep -n "setBool('darkTheme'" lib/main.dart
+          test "$(grep -o "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)" lib/main.dart | wc -l)" -ge 5
+
+      - name: Create Android shell
+        working-directory: pixlite_production
+        run: flutter create --platforms=android --org com.pixlite .
+
+      - name: Configure Android like known-good TEST 30
+        working-directory: pixlite_production
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          text=manifest.read_text()
+          head='<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          perms='''
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+          '''
+          if 'android.permission.INTERNET' not in text:
+              text=text.replace(head,head+perms)
+          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 34"')
+          text=text.replace('android:label="pixlite_production"','android:label="PixLite TEST 34"')
+          text=text.replace('android:icon="@mipmap/ic_launcher"','android:icon="@mipmap/pixlite_launcher"')
+          if 'android:roundIcon=' in text:
+              import re
+              text=re.sub(r'android:roundIcon="[^"]+"','android:roundIcon="@mipmap/pixlite_launcher"',text)
+          admob='''
+                  <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="ca-app-pub-8892609279215644~8049200739"/>
+          '''
+          if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
+              text=text.replace('<activity',admob+'\n        <activity',1)
+          manifest.write_text(text)
+          for path in [Path('android/app/build.gradle.kts'),Path('android/app/build.gradle')]:
+              if not path.exists(): continue
+              s=path.read_text()
+              s=s.replace('compileSdk = flutter.compileSdkVersion','compileSdk = 36')
+              s=s.replace('targetSdk = flutter.targetSdkVersion','targetSdk = 36')
+              s=s.replace('minSdk = flutter.minSdkVersion','minSdk = 21')
+              s=s.replace('compileSdkVersion flutter.compileSdkVersion','compileSdkVersion 36')
+              s=s.replace('targetSdkVersion flutter.targetSdkVersion','targetSdkVersion 36')
+              s=s.replace('minSdkVersion flutter.minSdkVersion','minSdkVersion 21')
+              path.write_text(s)
+          kts=Path('android/app/build.gradle.kts')
+          if kts.exists():
+              txt=kts.read_text()
+              if 'isMinifyEnabled = false' not in txt:
+                  txt += '''
+
+          android {
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                      isShrinkResources = false
+                      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+                  }
+              }
+          }
+          '''
+                  kts.write_text(txt)
+          Path('android/app/proguard-rules.pro').write_text('''
+          -keep class io.flutter.** { *; }
+          -keep class io.flutter.plugins.** { *; }
+          -keep class com.google.mlkit.** { *; }
+          -keep class com.google.android.gms.** { *; }
+          -dontwarn com.google.mlkit.**
+          -dontwarn com.google.android.gms.**
+          -dontwarn com.google.android.play.core.**
+          ''')
+          PY
+
+      - name: Generate dedicated launcher resources
+        working-directory: pixlite_production
+        run: |
+          python3 tooling/pixlite_launcher_v30.py
+          grep -n "@mipmap/pixlite_launcher" android/app/src/main/AndroidManifest.xml
+
+      - name: Verify no-shrink release config
+        working-directory: pixlite_production
+        run: |
+          grep -n "isMinifyEnabled = false" android/app/build.gradle.kts
+          grep -n "isShrinkResources = false" android/app/build.gradle.kts
+
+      - name: Analyze
+        working-directory: pixlite_production
+        run: flutter analyze lib --no-fatal-infos
+
+      - name: Build TEST 34 arm64 APK
+        working-directory: pixlite_production
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.34 --build-number=34
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release_files
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-34-arm64.apk
+          sha256sum release_files/PixLite-TEST-34-arm64.apk
+          ls -lh release_files/PixLite-TEST-34-arm64.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-TEST-34-arm64
+          path: release_files/PixLite-TEST-34-arm64.apk
