@@ -115,7 +115,7 @@ class _PixLiteAppState extends State<PixLiteApp> {
           appBarTheme: const AppBarTheme(backgroundColor:kBg, surfaceTintColor:Colors.transparent, foregroundColor:kText),
           filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(backgroundColor:kViolet, foregroundColor:Colors.white, minimumSize: const Size.fromHeight(54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)))),
           outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(foregroundColor:kText, side: const BorderSide(color:kStroke), minimumSize: const Size.fromHeight(48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)))),
-          inputDecorationTheme: InputDecorationTheme(filled:true, fillColor:kCard2, labelStyle: const TextStyle(color:kSub), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kStroke)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kStroke)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kViolet))),
+          inputDecorationTheme: InputDecorationTheme(filled:true, fillColor:kCard2, labelStyle: const TextStyle(color:kSub), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kStroke)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kStroke)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color:kOrange))),
         ),
         home: HomeScreen(lang: lang, tr: tr, onLang: setLang),
       ),
@@ -281,20 +281,15 @@ class PixLiteMark extends StatelessWidget {
   final double size;
   const PixLiteMark({super.key,this.size=44});
   @override Widget build(BuildContext context)=>Container(
-    width:size,height:size,padding:const EdgeInsets.all(2),
+    width:size,height:size,
     decoration:BoxDecoration(
-      gradient:const LinearGradient(colors:[kOrange,kPink,kViolet,kBlue],begin:Alignment.topLeft,end:Alignment.bottomRight),
+      color:const Color(0xFF090E1D),
       borderRadius:BorderRadius.circular(size*.25),
+      border:Border.all(color:kOrange,width:1.6),
       boxShadow:[BoxShadow(color:kOrange.withOpacity(.16),blurRadius:16,spreadRadius:1)]
     ),
-    child:Container(
-      decoration:BoxDecoration(color:const Color(0xFF090E1D),borderRadius:BorderRadius.circular(size*.21)),
-      alignment:Alignment.center,
-      child:ShaderMask(
-        shaderCallback:(r)=>const LinearGradient(colors:[Color(0xFFB934FF),Color(0xFF6F49FF),kOrange]).createShader(r),
-        child:Text('P',style:TextStyle(color:Colors.white,fontSize:size*.62,fontWeight:FontWeight.w900,height:1,letterSpacing:-2))
-      )
-    )
+    clipBehavior:Clip.antiAlias,
+    child:Image.asset('assets/pixlite_icon.png',fit:BoxFit.cover,errorBuilder:(_,__,___)=>Center(child:Text('P',style:TextStyle(color:kOrange,fontSize:size*.58,fontWeight:FontWeight.w900))))
   );
 }
 
@@ -317,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen>{
       ToolData(tr('qr'),tr('qr_sub'),Icons.qr_code_2_rounded,kOrange,QrScreen(tr:tr)),
     ];
     return ListView(padding:const EdgeInsets.fromLTRB(16,10,16,22),children:[
-      Row(children:[Expanded(child:Row(children:[const PixLiteMark(size:44),const SizedBox(width:10),const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('PixLite',style:TextStyle(color:kText,fontSize:27,fontWeight:FontWeight.w900,letterSpacing:-1)),SizedBox(height:1),Text('PDF & Document Tools • TEST 26',style:TextStyle(color:kOrange,fontSize:10.5,fontWeight:FontWeight.w800,letterSpacing:.2))])])),PopupMenuButton<String>(initialValue:widget.lang,color:kCard2,onSelected:widget.onLang,itemBuilder:(_)=>langNames.entries.map((e)=>PopupMenuItem(value:e.key,child:Text(e.value))).toList(),child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),decoration:BoxDecoration(color:kCard,borderRadius:BorderRadius.circular(14),border:Border.all(color:kStroke)),child:Row(mainAxisSize:MainAxisSize.min,children:[Text(widget.lang.toUpperCase(),style:const TextStyle(color:kText,fontSize:12,fontWeight:FontWeight.w800)),const Icon(Icons.keyboard_arrow_down_rounded,color:kSub,size:17)]))) ]),
+      Row(children:[Expanded(child:Row(children:[const PixLiteMark(size:50),const SizedBox(width:11),const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('PixLite',style:TextStyle(color:kText,fontSize:27,fontWeight:FontWeight.w900,letterSpacing:-1)),SizedBox(height:1),Text('PDF & Document Tools • TEST 28',style:TextStyle(color:kOrange,fontSize:10.5,fontWeight:FontWeight.w800,letterSpacing:.2))])])),PopupMenuButton<String>(initialValue:widget.lang,color:kCard2,onSelected:widget.onLang,itemBuilder:(_)=>langNames.entries.map((e)=>PopupMenuItem(value:e.key,child:Text(e.value))).toList(),child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),decoration:BoxDecoration(color:kCard,borderRadius:BorderRadius.circular(14),border:Border.all(color:kStroke)),child:Row(mainAxisSize:MainAxisSize.min,children:[Text(widget.lang.toUpperCase(),style:const TextStyle(color:kText,fontSize:12,fontWeight:FontWeight.w800)),const Icon(Icons.keyboard_arrow_down_rounded,color:kSub,size:17)]))) ]),
       const SizedBox(height:12),
       BannerAdBox(label:tr('ad'),adUnitId:AdIds.homeTopBanner),
       const SizedBox(height:12),
@@ -339,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen>{
       // Anchored above the nav bar, visible on Home only -- Files/Settings
       // stay ad-free rather than carrying an ad onto every screen.
       if(tab==0) Padding(padding:const EdgeInsets.fromLTRB(12,8,12,0),child:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.homeBottomBanner)),
-      NavigationBar(height:70,backgroundColor:const Color(0xFF080D19),indicatorColor:kOrange.withOpacity(.20),selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:[NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home_rounded),label:widget.tr('home')),NavigationDestination(icon:Icon(Icons.folder_outlined),selectedIcon:Icon(Icons.folder_rounded),label:widget.tr('files')),NavigationDestination(icon:Icon(Icons.settings_outlined),selectedIcon:Icon(Icons.settings_rounded),label:widget.tr('settings'))]),
+      NavigationBar(height:70,backgroundColor:const Color(0xFF080D19),indicatorColor:kOrange.withOpacity(.20),selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),destinations:[NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home_rounded,color:kOrange),label:widget.tr('home')),NavigationDestination(icon:Icon(Icons.folder_outlined),selectedIcon:Icon(Icons.folder_rounded,color:kOrange),label:widget.tr('files')),NavigationDestination(icon:Icon(Icons.settings_outlined),selectedIcon:Icon(Icons.settings_rounded,color:kOrange),label:widget.tr('settings'))]),
     ]),
   );
 }
