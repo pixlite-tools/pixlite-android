@@ -1,4 +1,4 @@
-name: Build PixLite TEST 25
+name: Build PixLite TEST 26
 
 on:
   workflow_dispatch:
@@ -39,27 +39,29 @@ jobs:
           flutter --version
           flutter pub get
 
-      - name: Apply and VERIFY PixLite TEST 25 source
+      - name: Apply and VERIFY PixLite TEST 26 source
         working-directory: pixlite_production
         run: |
-          python3 tooling/pixlite_post_patch.py
+          python3 tooling/pixlite_style_v26.py
           python3 tooling/pixlite_build_fix.py
           python3 tooling/pixlite_ci_verify.py
-          grep -n "PDF & Document Tools • TEST 25" lib/main.dart
-          grep -n "Image.asset('assets/pixlite_icon.png'" lib/main.dart
+          grep -n "PDF & Document Tools • TEST 26" lib/main.dart
+          grep -n "class PixLiteMark" lib/main.dart
+          grep -n "const kOrange = Color(0xFFFF8500)" lib/main.dart
+          grep -n "Icons.campaign_rounded,color:kOrange" lib/main.dart
+          test "$(grep -o "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)" lib/main.dart | wc -l)" -ge 5
           grep -n "AdIds.homeTopBanner" lib/main.dart
           grep -n "AdIds.homeInlineBanner" lib/main.dart
           grep -n "AdIds.homeBottomBanner" lib/main.dart
           grep -n "class OutputStore" lib/main.dart
-          grep -n "FutureBuilder<List<SavedOutput>>" lib/main.dart
 
-      - name: Persist verified TEST 25 app source
+      - name: Persist verified TEST 26 app source
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add pixlite_production/lib/main.dart
           if ! git diff --cached --quiet; then
-            git commit -m "Persist verified PixLite TEST 25 source [skip ci]"
+            git commit -m "Persist verified PixLite TEST 26 source [skip ci]"
             git push
           else
             echo "Verified source already persisted."
@@ -85,8 +87,8 @@ jobs:
           '''
           if "android.permission.INTERNET" not in text:
               text = text.replace(head, head + perms)
-          text = text.replace('android:label="pixlite"', 'android:label="PixLite TEST 25"')
-          text = text.replace('android:label="pixlite_production"', 'android:label="PixLite TEST 25"')
+          text = text.replace('android:label="pixlite"', 'android:label="PixLite TEST 26"')
+          text = text.replace('android:label="pixlite_production"', 'android:label="PixLite TEST 26"')
           admob = '''
                   <meta-data
                       android:name="com.google.android.gms.ads.APPLICATION_ID"
@@ -165,19 +167,19 @@ jobs:
         working-directory: pixlite_production
         run: flutter analyze lib --no-fatal-infos
 
-      - name: Build uniquely versioned TEST 25 arm64 APK
+      - name: Build uniquely versioned TEST 26 arm64 APK
         working-directory: pixlite_production
-        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.25 --build-number=25
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.26 --build-number=26
 
-      - name: Prepare TEST 25 artifact
+      - name: Prepare TEST 26 artifact
         run: |
           mkdir -p release_files
-          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-25-arm64.apk
-          sha256sum release_files/PixLite-TEST-25-arm64.apk
-          ls -lh release_files/PixLite-TEST-25-arm64.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-26-arm64.apk
+          sha256sum release_files/PixLite-TEST-26-arm64.apk
+          ls -lh release_files/PixLite-TEST-26-arm64.apk
 
-      - name: Upload TEST 25 APK
+      - name: Upload TEST 26 APK
         uses: actions/upload-artifact@v4
         with:
-          name: pixlite-TEST-25-arm64
-          path: release_files/PixLite-TEST-25-arm64.apk
+          name: pixlite-TEST-26-arm64
+          path: release_files/PixLite-TEST-26-arm64.apk
