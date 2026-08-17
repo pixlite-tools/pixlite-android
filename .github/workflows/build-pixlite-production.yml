@@ -1,4 +1,4 @@
-name: Build PixLite TEST 32
+name: Build PixLite TEST 33
 
 on:
   workflow_dispatch:
@@ -31,22 +31,23 @@ jobs:
         working-directory: pixlite_production
         run: flutter pub get
 
-      - name: Generate deterministic orange PixLite brand asset
+      - name: Generate approved current PixLite brand asset
         working-directory: pixlite_production
         run: |
           python3 -m pip install pillow
           python3 tooling/pixlite_icon_v30.py
 
-      - name: Apply TEST 32 source
+      - name: Apply TEST 33 source
         working-directory: pixlite_production
         run: |
           python3 tooling/pixlite_style_v30.py
           python3 tooling/pixlite_theme_v31.py
+          python3 tooling/pixlite_privacy_v33.py
           python3 tooling/pixlite_build_fix.py
-          grep -n "PDF & Document Tools • TEST 32" lib/main.dart
+          grep -n "PDF & Document Tools • TEST 33" lib/main.dart
+          grep -n "PrivacyScreen(lang:lang,tr:tr)" lib/main.dart
+          grep -n "Google Mobile Ads" lib/main.dart
           grep -n "setBool('darkTheme'" lib/main.dart
-          grep -n "tr(dark?'dark':'light')" lib/main.dart
-          grep -n "PixLitePalette.dark = dark" lib/main.dart
           grep -n "foregroundColor:Colors.white" lib/main.dart
           grep -n "childAspectRatio:1.65" lib/main.dart
           test "$(grep -o "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)" lib/main.dart | wc -l)" -ge 5
@@ -70,8 +71,8 @@ jobs:
           '''
           if 'android.permission.INTERNET' not in text:
               text=text.replace(head,head+perms)
-          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 32"')
-          text=text.replace('android:label="pixlite_production"','android:label="PixLite TEST 32"')
+          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 33"')
+          text=text.replace('android:label="pixlite_production"','android:label="PixLite TEST 33"')
           text=text.replace('android:icon="@mipmap/ic_launcher"','android:icon="@mipmap/pixlite_launcher"')
           if 'android:roundIcon=' in text:
               import re
@@ -139,18 +140,18 @@ jobs:
         working-directory: pixlite_production
         run: flutter analyze lib --no-fatal-infos
 
-      - name: Build TEST 32 arm64 APK
+      - name: Build TEST 33 arm64 APK
         working-directory: pixlite_production
-        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.32 --build-number=32
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.33 --build-number=33
 
       - name: Prepare artifact
         run: |
           mkdir -p release_files
-          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-32-arm64.apk
-          sha256sum release_files/PixLite-TEST-32-arm64.apk
-          ls -lh release_files/PixLite-TEST-32-arm64.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-33-arm64.apk
+          sha256sum release_files/PixLite-TEST-33-arm64.apk
+          ls -lh release_files/PixLite-TEST-33-arm64.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pixlite-TEST-32-arm64
-          path: release_files/PixLite-TEST-32-arm64.apk
+          name: pixlite-TEST-33-arm64
+          path: release_files/PixLite-TEST-33-arm64.apk
