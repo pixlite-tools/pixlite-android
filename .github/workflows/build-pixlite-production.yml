@@ -1,4 +1,4 @@
-name: Build PixLite TEST 29
+name: Build PixLite TEST 30
 
 on:
   workflow_dispatch:
@@ -31,38 +31,30 @@ jobs:
         working-directory: pixlite_production
         run: flutter pub get
 
-      - name: Apply TEST 29 marker only
+      - name: Generate deterministic orange PixLite brand asset
         working-directory: pixlite_production
         run: |
-          python3 tooling/pixlite_style_v29.py
-          python3 tooling/pixlite_build_fix.py
-          grep -n "PDF & Document Tools • TEST 29" lib/main.dart
-          grep -n "Image.asset('assets/pixlite_icon.png'" lib/main.dart
-          grep -n "AdIds.homeTopBanner" lib/main.dart
-          grep -n "AdIds.homeInlineBanner" lib/main.dart
-          grep -n "AdIds.homeBottomBanner" lib/main.dart
-          test "$(grep -o "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)" lib/main.dart | wc -l)" -ge 5
+          python3 -m pip install pillow
+          python3 tooling/pixlite_icon_v30.py
 
-      - name: Persist verified TEST 29 source
+      - name: Apply TEST 30 source
+        working-directory: pixlite_production
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pixlite_production/lib/main.dart
-          if ! git diff --cached --quiet; then
-            git commit -m "Persist PixLite TEST 29 source [skip ci]"
-            git push
-          fi
+          python3 tooling/pixlite_style_v30.py
+          python3 tooling/pixlite_build_fix.py
+          grep -n "PDF & Document Tools • TEST 30" lib/main.dart
+          grep -n "Image.asset('assets/pixlite_icon.png'" lib/main.dart
+          test "$(grep -o "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)" lib/main.dart | wc -l)" -ge 5
 
       - name: Create Android shell
         working-directory: pixlite_production
         run: flutter create --platforms=android --org com.pixlite .
 
-      - name: Configure Android exactly like known-good TEST 26
+      - name: Configure Android like known-good TEST 29
         working-directory: pixlite_production
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           manifest=Path('android/app/src/main/AndroidManifest.xml')
           text=manifest.read_text()
           head='<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
@@ -73,8 +65,12 @@ jobs:
           '''
           if 'android.permission.INTERNET' not in text:
               text=text.replace(head,head+perms)
-          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 29"')
-          text=text.replace('android:label="pixlite_production"','android:label="PixLite TEST 29"')
+          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 30"')
+          text=text.replace('android:label="pixlite_production"','android:label="PixLite TEST 30"')
+          text=text.replace('android:icon="@mipmap/ic_launcher"','android:icon="@mipmap/pixlite_launcher"')
+          if 'android:roundIcon=' in text:
+              import re
+              text=re.sub(r'android:roundIcon="[^"]+"','android:roundIcon="@mipmap/pixlite_launcher"',text)
           admob='''
                   <meta-data
                       android:name="com.google.android.gms.ads.APPLICATION_ID"
@@ -85,8 +81,7 @@ jobs:
           manifest.write_text(text)
 
           for path in [Path('android/app/build.gradle.kts'),Path('android/app/build.gradle')]:
-              if not path.exists():
-                  continue
+              if not path.exists(): continue
               s=path.read_text()
               s=s.replace('compileSdk = flutter.compileSdkVersion','compileSdk = 36')
               s=s.replace('targetSdk = flutter.targetSdkVersion','targetSdk = 36')
@@ -107,16 +102,12 @@ jobs:
                   release {
                       isMinifyEnabled = false
                       isShrinkResources = false
-                      proguardFiles(
-                          getDefaultProguardFile("proguard-android-optimize.txt"),
-                          "proguard-rules.pro"
-                      )
+                      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
                   }
               }
           }
           '''
                   kts.write_text(txt)
-
           Path('android/app/proguard-rules.pro').write_text('''
           -keep class io.flutter.** { *; }
           -keep class io.flutter.plugins.** { *; }
@@ -124,29 +115,16 @@ jobs:
           -keep class com.google.android.gms.** { *; }
           -dontwarn com.google.mlkit.**
           -dontwarn com.google.android.gms.**
-          -dontwarn com.google.android.play.core.splitcompat.**
-          -dontwarn com.google.android.play.core.splitinstall.**
-          -dontwarn com.google.android.play.core.tasks.**
+          -dontwarn com.google.android.play.core.**
           ''')
           PY
 
-      - name: Keep TEST 28 orange brand asset
+      - name: Generate dedicated launcher resources
         working-directory: pixlite_production
         run: |
-          python3 -m pip install pillow
-          python3 - <<'PY'
-          from pathlib import Path
-          from PIL import Image
-          src=Path('assets/pixlite_icon.png')
-          im=Image.open(src).convert('RGBA')
-          res=Path('android/app/src/main/res')
-          for folder,size in {'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}.items():
-              out=res/folder; out.mkdir(parents=True,exist_ok=True); im.resize((size,size),Image.LANCZOS).save(out/'ic_launcher.png')
-          for folder,size in {'drawable-mdpi':160,'drawable-hdpi':240,'drawable-xhdpi':320,'drawable-xxhdpi':480,'drawable-xxxhdpi':640}.items():
-              out=res/folder; out.mkdir(parents=True,exist_ok=True)
-              canvas=Image.new('RGBA',(size,size),(5,8,20,255)); mark=im.copy(); mark.thumbnail((int(size*.70),int(size*.70)),Image.LANCZOS)
-              canvas.alpha_composite(mark,((size-mark.width)//2,(size-mark.height)//2)); canvas.save(out/'pixlite_splash.png')
-          PY
+          python3 tooling/pixlite_launcher_v30.py
+          grep -n "@mipmap/pixlite_launcher" android/app/src/main/AndroidManifest.xml
+          find android/app/src/main/res -name 'pixlite_launcher.png' -print
 
       - name: Verify no-shrink release config
         working-directory: pixlite_production
@@ -158,18 +136,18 @@ jobs:
         working-directory: pixlite_production
         run: flutter analyze lib --no-fatal-infos
 
-      - name: Build TEST 29 arm64 APK
+      - name: Build TEST 30 arm64 APK
         working-directory: pixlite_production
-        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.29 --build-number=29
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.30 --build-number=30
 
       - name: Prepare artifact
         run: |
           mkdir -p release_files
-          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-29-arm64.apk
-          sha256sum release_files/PixLite-TEST-29-arm64.apk
-          ls -lh release_files/PixLite-TEST-29-arm64.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-30-arm64.apk
+          sha256sum release_files/PixLite-TEST-30-arm64.apk
+          ls -lh release_files/PixLite-TEST-30-arm64.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pixlite-TEST-29-arm64
-          path: release_files/PixLite-TEST-29-arm64.apk
+          name: pixlite-TEST-30-arm64
+          path: release_files/PixLite-TEST-30-arm64.apk
