@@ -64,12 +64,20 @@ s=s.replace("Color(0xFF080D19)", "kCard")
 s=s.replace("Color(0xFF0A1121)", "kCard")
 s=s.replace("Color(0xFF070B15)", "kCard2")
 
-s=s.replace('PDF & Document Tools • TEST 29','PDF & Document Tools • TEST 31')
-s=s.replace('PDF & Document Tools • TEST 30','PDF & Document Tools • TEST 31')
+# The hero remains intentionally dark in both themes, so its secondary action must keep white text.
+s=s.replace("foregroundColor:kText),icon:Icon(Icons.document_scanner_rounded,color:kOrange),label:Text(tr('scan_document'),style:TextStyle(fontWeight:FontWeight.w800))", "foregroundColor:Colors.white),icon:Icon(Icons.document_scanner_rounded,color:kOrange),label:Text(tr('scan_document'),style:TextStyle(color:Colors.white,fontWeight:FontWeight.w800))")
 
-checks=["setBool('darkTheme'","tr(dark?'dark':'light')","PixLitePalette.dark = dark","PDF & Document Tools • TEST 31","static final _key=","static final _cooldown="]
+# Give longer FR/ES labels enough room instead of clipping them to one line.
+s=s.replace("childAspectRatio:1.8", "childAspectRatio:1.65")
+s=s.replace("Text(t.title,maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(color:kText,fontSize:12.5,fontWeight:FontWeight.w900))", "Text(t.title,maxLines:2,overflow:TextOverflow.ellipsis,style:TextStyle(color:kText,fontSize:12,fontWeight:FontWeight.w900,height:1.05))")
+s=s.replace("Text(t.subtitle,maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(color:kSub,fontSize:9.5))", "Text(t.subtitle,maxLines:2,overflow:TextOverflow.ellipsis,style:TextStyle(color:kSub,fontSize:9.2,height:1.05))")
+
+s=s.replace('PDF & Document Tools • TEST 29','PDF & Document Tools • TEST 32')
+s=s.replace('PDF & Document Tools • TEST 30','PDF & Document Tools • TEST 32')
+
+checks=["setBool('darkTheme'","tr(dark?'dark':'light')","PixLitePalette.dark = dark","PDF & Document Tools • TEST 32","static final _key=","static final _cooldown=","foregroundColor:Colors.white","childAspectRatio:1.65"]
 for q in checks:
     if q not in s: raise SystemExit('missing '+q)
 
 p.write_text(s)
-print('PixLite TEST 31 functional persisted theme applied')
+print('PixLite TEST 32 theme polish applied')
