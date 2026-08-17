@@ -15,15 +15,12 @@ if "const kOrange = Color(0xFFFF8500);" not in s:
         1,
     )
 
-# A purpose-built header mark instead of dropping the raw launcher artwork
-# into a white square. It keeps PixLite's violet/blue DNA while adding the
-# new orange accent as a premium outer edge.
 mark = r'''
 class PixLiteMark extends StatelessWidget {
   final double size;
   const PixLiteMark({super.key,this.size=44});
   @override Widget build(BuildContext context)=>Container(
-    width:size,height:size,padding:2,
+    width:size,height:size,padding:const EdgeInsets.all(2),
     decoration:BoxDecoration(
       gradient:const LinearGradient(colors:[kOrange,kPink,kViolet,kBlue],begin:Alignment.topLeft,end:Alignment.bottomRight),
       borderRadius:BorderRadius.circular(size*.25),
@@ -44,6 +41,9 @@ class PixLiteMark extends StatelessWidget {
 if 'class PixLiteMark extends StatelessWidget' not in s:
     s = s.replace('class HomeScreen extends StatefulWidget{', mark + 'class HomeScreen extends StatefulWidget{', 1)
 
+# Repair TEST 26 source persisted by an earlier run before the padding type fix.
+s = s.replace("width:size,height:size,padding:2,", "width:size,height:size,padding:const EdgeInsets.all(2),")
+
 s = s.replace("Image.asset('assets/pixlite_icon.png',width:36,height:36)", "const PixLiteMark(size:44)")
 s = s.replace("PDF & Document Tools • TEST 25", "PDF & Document Tools • TEST 26")
 s = s.replace(
@@ -51,8 +51,6 @@ s = s.replace(
     "Text('PDF & Document Tools • TEST 26',style:TextStyle(color:kOrange,fontSize:10.5,fontWeight:FontWeight.w800,letterSpacing:.2))",
 )
 
-# Orange-framed ad inventory. The actual AdMob creative still replaces the
-# placeholder when filled; no ad ID or request behavior changes here.
 s = s.replace(
     "decoration:BoxDecoration(color:const Color(0xFF090F1E),border:Border.all(color:kStroke),borderRadius:BorderRadius.circular(18))",
     "decoration:BoxDecoration(color:const Color(0xFF090F1E),border:Border.all(color:kOrange.withOpacity(.82),width:1.15),borderRadius:BorderRadius.circular(18),boxShadow:[BoxShadow(color:kOrange.withOpacity(.05),blurRadius:12)])",
@@ -62,8 +60,6 @@ s = s.replace(
     "const Icon(Icons.campaign_rounded,color:kOrange,size:18)",
 )
 
-# Home PDF + Scan hero: retain the purple/blue gradient, but tie it to the new
-# orange system with a refined frame and warm accent on the PDF tile.
 s = s.replace(
     "border:Border.all(color:const Color(0x667C4DFF))",
     "border:Border.all(color:kOrange.withOpacity(.58),width:1.15)",
@@ -80,49 +76,36 @@ s = s.replace(
     1,
 )
 
-# Orange becomes the QR accent and selected-nav accent; violet remains a
-# secondary brand color so the app does not turn monochrome orange.
 s = s.replace(
     "ToolData(tr('qr'),tr('qr_sub'),Icons.qr_code_2_rounded,const Color(0xFF726BFF),QrScreen(tr:tr))",
     "ToolData(tr('qr'),tr('qr_sub'),Icons.qr_code_2_rounded,kOrange,QrScreen(tr:tr))",
     1,
 )
 s = s.replace("indicatorColor:kViolet.withOpacity(.22)", "indicatorColor:kOrange.withOpacity(.20)", 1)
-
-# Slight warm cue in the empty Files state.
 s = s.replace("const Icon(Icons.folder_open_rounded,color:kSub,size:50)", "const Icon(Icons.folder_open_rounded,color:kOrange,size:50)", 1)
 
-# Picker preview frames get a restrained orange edge, matching the mockup
-# without overwhelming the tool cards.
 s = s.replace(
     "border:Border.all(color:kStroke)),clipBehavior:Clip.antiAlias,child:bytes==null",
     "border:Border.all(color:kOrange.withOpacity(.42),width:1.0)),clipBehavior:Clip.antiAlias,child:bytes==null",
     1,
 )
-
-# The scanner's empty-state icon gets the same accent when present.
 s = s.replace("Icons.document_scanner_rounded,size:82,color:kBlue", "Icons.document_scanner_rounded,size:82,color:kOrange")
 s = s.replace("Icons.document_scanner_rounded,size:70,color:kBlue", "Icons.document_scanner_rounded,size:70,color:kOrange")
 
-# CRITICAL: bottom banners on tool screens must remain visibly allocated even
-# when AdMob has no fill. BannerAdBox keeps the polished orange placeholder,
-# whereas CollapsibleBannerAdBox deliberately shrank to zero height.
 s = s.replace(
     "bottomAd:const CollapsibleBannerAdBox()",
     "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)",
 )
-# Files + Settings use a local tr callback rather than widget.tr.
 s = s.replace(
     "    CollapsibleBannerAdBox(),",
     "    BannerAdBox(label:tr('ad'),adUnitId:AdIds.toolBottomBanner),",
 )
 
-# QA assertions: fail the build instead of silently producing another copy of
-# the previous UI.
 checks = {
     'orange constant': "const kOrange = Color(0xFFFF8500);",
     'professional header mark': "class PixLiteMark extends StatelessWidget",
     'header uses mark': "const PixLiteMark(size:44)",
+    'valid mark padding': "padding:const EdgeInsets.all(2)",
     'test marker': "PDF & Document Tools • TEST 26",
     'orange ad icon': "Icons.campaign_rounded,color:kOrange",
     'tool bottom banner': "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)",
@@ -131,7 +114,6 @@ for name, needle in checks.items():
     if needle not in s:
         raise SystemExit(f'TEST 26 patch failed: missing {name}: {needle}')
 
-# Require several tool pages to have been converted, not just one.
 if s.count("bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)") < 5:
     raise SystemExit('TEST 26 patch failed: fewer than five tool bottom banners are persistent')
 
