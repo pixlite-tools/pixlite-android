@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 p=Path('lib/main.dart')
 s=p.read_text()
@@ -8,8 +9,8 @@ s=s.replace('const ', '')
 for name in ['kViolet','kBlue','kMint','kGold','kPink','kOrange']:
     s=s.replace(f'{name} = Color(', f'final {name} = Color(')
 s=s.replace('langNames = {', 'final langNames = {')
-s=s.replace('static _key =', 'static final _key =')
-s=s.replace('static _cooldown =', 'static final _cooldown =')
+s=re.sub(r'\bstatic\s+_key\s*=', 'static final _key=', s)
+s=re.sub(r'\bstatic\s+_cooldown\s*=', 'static final _cooldown=', s)
 s=s.replace('formats=<DocumentFormat>{', 'final formats=<DocumentFormat>{')
 
 old="""kBg = Color(0xFF050814);
@@ -66,7 +67,7 @@ s=s.replace("Color(0xFF070B15)", "kCard2")
 s=s.replace('PDF & Document Tools • TEST 29','PDF & Document Tools • TEST 31')
 s=s.replace('PDF & Document Tools • TEST 30','PDF & Document Tools • TEST 31')
 
-checks=["setBool('darkTheme'","tr(dark?'dark':'light')","PixLitePalette.dark = dark","PDF & Document Tools • TEST 31"]
+checks=["setBool('darkTheme'","tr(dark?'dark':'light')","PixLitePalette.dark = dark","PDF & Document Tools • TEST 31","static final _key=","static final _cooldown="]
 for q in checks:
     if q not in s: raise SystemExit('missing '+q)
 
