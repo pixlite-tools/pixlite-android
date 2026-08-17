@@ -4,6 +4,13 @@ p=Path('lib/main.dart')
 s=p.read_text()
 
 s=s.replace('const ', '')
+# Repair declarations that originally relied on inferred `const`.
+for name in ['kViolet','kBlue','kMint','kGold','kPink','kOrange']:
+    s=s.replace(f'{name} = Color(', f'final {name} = Color(')
+s=s.replace('langNames = {', 'final langNames = {')
+s=s.replace('static _key =', 'static final _key =')
+s=s.replace('static _cooldown =', 'static final _cooldown =')
+s=s.replace('formats=<DocumentFormat>{', 'final formats=<DocumentFormat>{')
 
 old="""kBg = Color(0xFF050814);
 kCard = Color(0xFF0D1324);
