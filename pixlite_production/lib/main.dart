@@ -281,7 +281,7 @@ class PixLiteMark extends StatelessWidget {
   final double size;
   const PixLiteMark({super.key,this.size=44});
   @override Widget build(BuildContext context)=>Container(
-    width:size,height:size,padding:2,
+    width:size,height:size,padding:const EdgeInsets.all(2),
     decoration:BoxDecoration(
       gradient:const LinearGradient(colors:[kOrange,kPink,kViolet,kBlue],begin:Alignment.topLeft,end:Alignment.bottomRight),
       borderRadius:BorderRadius.circular(size*.25),
