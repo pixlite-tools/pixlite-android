@@ -1,4 +1,4 @@
-name: Build PixLite TEST 30
+name: Build PixLite TEST 31
 
 on:
   workflow_dispatch:
@@ -37,20 +37,23 @@ jobs:
           python3 -m pip install pillow
           python3 tooling/pixlite_icon_v30.py
 
-      - name: Apply TEST 30 source
+      - name: Apply TEST 31 source
         working-directory: pixlite_production
         run: |
           python3 tooling/pixlite_style_v30.py
+          python3 tooling/pixlite_theme_v31.py
           python3 tooling/pixlite_build_fix.py
-          grep -n "PDF & Document Tools • TEST 30" lib/main.dart
-          grep -n "Image.asset('assets/pixlite_icon.png'" lib/main.dart
+          grep -n "PDF & Document Tools • TEST 31" lib/main.dart
+          grep -n "setBool('darkTheme'" lib/main.dart
+          grep -n "tr(dark?'dark':'light')" lib/main.dart
+          grep -n "PixLitePalette.dark = dark" lib/main.dart
           test "$(grep -o "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)" lib/main.dart | wc -l)" -ge 5
 
       - name: Create Android shell
         working-directory: pixlite_production
         run: flutter create --platforms=android --org com.pixlite .
 
-      - name: Configure Android like known-good TEST 29
+      - name: Configure Android like known-good TEST 30
         working-directory: pixlite_production
         run: |
           python3 - <<'PY'
@@ -65,8 +68,8 @@ jobs:
           '''
           if 'android.permission.INTERNET' not in text:
               text=text.replace(head,head+perms)
-          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 30"')
-          text=text.replace('android:label="pixlite_production"','android:label="PixLite TEST 30"')
+          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 31"')
+          text=text.replace('android:label="pixlite_production"','android:label="PixLite TEST 31"')
           text=text.replace('android:icon="@mipmap/ic_launcher"','android:icon="@mipmap/pixlite_launcher"')
           if 'android:roundIcon=' in text:
               import re
@@ -79,7 +82,6 @@ jobs:
           if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
               text=text.replace('<activity',admob+'\n        <activity',1)
           manifest.write_text(text)
-
           for path in [Path('android/app/build.gradle.kts'),Path('android/app/build.gradle')]:
               if not path.exists(): continue
               s=path.read_text()
@@ -90,7 +92,6 @@ jobs:
               s=s.replace('targetSdkVersion flutter.targetSdkVersion','targetSdkVersion 36')
               s=s.replace('minSdkVersion flutter.minSdkVersion','minSdkVersion 21')
               path.write_text(s)
-
           kts=Path('android/app/build.gradle.kts')
           if kts.exists():
               txt=kts.read_text()
@@ -136,18 +137,18 @@ jobs:
         working-directory: pixlite_production
         run: flutter analyze lib --no-fatal-infos
 
-      - name: Build TEST 30 arm64 APK
+      - name: Build TEST 31 arm64 APK
         working-directory: pixlite_production
-        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.30 --build-number=30
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.31 --build-number=31
 
       - name: Prepare artifact
         run: |
           mkdir -p release_files
-          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-30-arm64.apk
-          sha256sum release_files/PixLite-TEST-30-arm64.apk
-          ls -lh release_files/PixLite-TEST-30-arm64.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-31-arm64.apk
+          sha256sum release_files/PixLite-TEST-31-arm64.apk
+          ls -lh release_files/PixLite-TEST-31-arm64.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pixlite-TEST-30-arm64
-          path: release_files/PixLite-TEST-30-arm64.apk
+          name: pixlite-TEST-31-arm64
+          path: release_files/PixLite-TEST-31-arm64.apk
