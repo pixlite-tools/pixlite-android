@@ -1,4 +1,4 @@
-name: Build PixLite RC1
+name: Build PixLite RC2
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/build-pixlite-rc.yml"
       - "pixlite_production/tooling/pixlite_release_cleanup.py"
+      - "pixlite_production/tooling/pixlite_adflow_rc2.py"
 
 permissions:
   contents: read
@@ -37,18 +38,22 @@ jobs:
           python3 -m pip install pillow
           python3 tooling/pixlite_icon_v30.py
 
-      - name: Apply current stable feature set and release cleanup
+      - name: Apply stable feature set, corrected monetization flow, and release cleanup
         working-directory: pixlite_production
         run: |
           python3 tooling/pixlite_style_v30.py
           python3 tooling/pixlite_theme_v31.py
           python3 tooling/pixlite_privacy_v33.py
           python3 tooling/pixlite_back_v34.py
+          python3 tooling/pixlite_adflow_rc2.py
           python3 tooling/pixlite_release_cleanup.py
           python3 tooling/pixlite_build_fix.py
           grep -n "PDF & Document Tools" lib/main.dart
           grep -n "Press back again to exit" lib/main.dart
           grep -n "PrivacyScreen(lang:lang,tr:tr)" lib/main.dart
+          grep -n "showAndWaitIfReady" lib/main.dart
+          grep -n "Future<void> generateQr" lib/main.dart
+          if grep -n "Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)" lib/main.dart; then echo "Old delayed post-share ad flow remains"; exit 1; fi
           if grep -n "TEST " lib/main.dart; then echo "TEST marker found in release source"; exit 1; fi
 
       - name: Create Android shell
@@ -101,7 +106,6 @@ jobs:
               s=re.sub(r'applicationId\s+"[^"]+"','applicationId "com.pixlite.pixlite"',s)
               path.write_text(s)
 
-          # Align MainActivity package with the immutable Play package ID.
           for f in list(Path('android/app/src/main/kotlin').rglob('MainActivity.kt')) + list(Path('android/app/src/main/java').rglob('MainActivity.java')):
               src=f.read_text()
               src=re.sub(r'^package\s+[\w.]+', 'package com.pixlite.pixlite', src, count=1, flags=re.M)
@@ -151,9 +155,9 @@ jobs:
         working-directory: pixlite_production
         run: flutter analyze lib --no-fatal-infos
 
-      - name: Build RC1 arm64 APK
+      - name: Build RC2 arm64 APK
         working-directory: pixlite_production
-        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.0 --build-number=1
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.0 --build-number=2
 
       - name: Verify built APK identity
         working-directory: pixlite_production
@@ -165,11 +169,11 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir -p release_files
-          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-RC1-arm64.apk
-          sha256sum release_files/PixLite-RC1-arm64.apk
-          ls -lh release_files/PixLite-RC1-arm64.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-RC2-arm64.apk
+          sha256sum release_files/PixLite-RC2-arm64.apk
+          ls -lh release_files/PixLite-RC2-arm64.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pixlite-RC1-arm64
-          path: release_files/PixLite-RC1-arm64.apk
+          name: pixlite-RC2-arm64
+          path: release_files/PixLite-RC2-arm64.apk
