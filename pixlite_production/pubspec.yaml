@@ -1,0 +1,32 @@
+name: pixlite
+description: >-
+  PDF tools for everyday documents. Create, merge, compress and scan files
+  from your phone.
+publish_to: "none"
+version: 1.0.0+15
+
+environment:
+  sdk: ">=3.10.0-0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  image_picker: ^1.1.2
+  image: ^4.8.0
+  path_provider: ^2.1.5
+  share_plus: ^11.0.0
+  pdf: ^3.11.3
+  qr_flutter: ^4.1.0
+  google_mobile_ads: ^7.0.0
+  shared_preferences: ^2.5.3
+  google_mlkit_document_scanner: ^0.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/pixlite_icon.png
