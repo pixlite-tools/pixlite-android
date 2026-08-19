@@ -128,3 +128,4 @@ jobs:
         with:
           name: pixlite-v14-scanbot-proof-debug-apk
           path: release_files/PixLite-v14-scanbot-proof-debug.apk
+          retention-days: 1
