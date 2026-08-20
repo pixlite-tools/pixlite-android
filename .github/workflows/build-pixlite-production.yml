@@ -37,20 +37,25 @@ jobs:
           python3 -m pip install pillow
           python3 tooling/pixlite_icon_v30.py
 
-      - name: Apply TEST 33 source
+      - name: Apply TEST 33 source and release-blocking ad flow
         working-directory: pixlite_production
         run: |
           python3 tooling/pixlite_style_v30.py
           python3 tooling/pixlite_theme_v31.py
           python3 tooling/pixlite_privacy_v33.py
+          python3 tooling/pixlite_back_v34.py
+          python3 tooling/pixlite_adflow_rc2.py
           python3 tooling/pixlite_build_fix.py
-          grep -n "PDF & Document Tools • TEST 33" lib/main.dart
+          grep -n "PDF & Document Tools" lib/main.dart
           grep -n "PrivacyScreen(lang:lang,tr:tr)" lib/main.dart
           grep -n "Google Mobile Ads" lib/main.dart
           grep -n "setBool('darkTheme'" lib/main.dart
           grep -n "foregroundColor:Colors.white" lib/main.dart
           grep -n "childAspectRatio:1.65" lib/main.dart
+          grep -n "showAndWaitIfReady" lib/main.dart
+          grep -n "Future<void> generateQr" lib/main.dart
           test "$(grep -o "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)" lib/main.dart | wc -l)" -ge 5
+          if grep -n "Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)" lib/main.dart; then echo "Old delayed post-share ad flow remains"; exit 1; fi
 
       - name: Create Android shell
         working-directory: pixlite_production
