@@ -8,6 +8,20 @@ s=p.read_text()
 if "import 'dart:async';" not in s:
     s=s.replace("import 'dart:convert';", "import 'dart:async';\nimport 'dart:convert';", 1)
 
+# A process completion can be delivered twice by fast repeated taps, route
+# churn, or widget lifecycle changes. Keep one app-wide in-flight gate so the
+# same completion window cannot trigger a second interstitial while the first
+# is already on screen.
+if 'static bool _showing=false;' not in s:
+    anchor='''  static InterstitialAd? _ad;
+  static bool _loading=false;'''
+    replacement='''  static InterstitialAd? _ad;
+  static bool _loading=false;
+  static bool _showing=false;'''
+    if anchor not in s:
+        raise SystemExit('Interstitial state anchor not found')
+    s=s.replace(anchor,replacement,1)
+
 old_manager='''  static Future<void> showIfReady() async {
     final ad=_ad;
     if(ad==null){ preload(); return; }
@@ -22,15 +36,18 @@ old_manager='''  static Future<void> showIfReady() async {
     try{ await ad.show(); }catch(_){}
   }'''
 new_manager='''  static Future<bool> showAndWaitIfReady() async {
+    if(_showing) return false;
     final ad=_ad;
     if(ad==null){ preload(); return false; }
     final last=_lastShown;
     if(last!=null && DateTime.now().difference(last)<_cooldown) return false;
 
     _ad=null;
+    _showing=true;
     final done=Completer<void>();
     void finish(InterstitialAd a){
       a.dispose();
+      _showing=false;
       preload();
       if(!done.isCompleted) done.complete();
     }
@@ -44,11 +61,13 @@ new_manager='''  static Future<bool> showAndWaitIfReady() async {
       await ad.show();
       await done.future.timeout(const Duration(seconds:60),onTimeout:(){
         try{ad.dispose();}catch(_){}
+        _showing=false;
         preload();
       });
       return true;
     }catch(_){
       try{ad.dispose();}catch(_){}
+      _showing=false;
       preload();
       if(!done.isCompleted) done.complete();
       return false;
@@ -88,7 +107,7 @@ for a,b in repls.items():
     s=s.replace(a,b,1)
 
 # Scanner: ad immediately after the scan has been successfully normalized and
-# saved, before scanned pages/export controls are revealed.
+# produced, before scanned pages/export controls are revealed.
 old_scan='''      if(!mounted)return;
       setState((){
         imagePaths..clear()..addAll(images);
@@ -133,6 +152,8 @@ s=s.replace(old_qr,new_qr,1)
 if 'Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)' in s:
     raise SystemExit('Delayed interstitial remains after patch')
 for required in [
+    'static bool _showing=false;',
+    'if(_showing) return false;',
     'showAndWaitIfReady()',
     'await InterstitialAdManager.showAndWaitIfReady();',
     'Future<void> generateQr()',
@@ -141,4 +162,4 @@ for required in [
     if required not in s: raise SystemExit('Adflow patch missing: '+required)
 
 p.write_text(s)
-print('PixLite RC2 monetization flow fixed: execute -> ad -> result/share/save')
+print('PixLite RC2 monetization flow fixed: execute -> success/output -> ad -> result/share/save')
