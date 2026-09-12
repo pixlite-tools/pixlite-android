@@ -1,0 +1,7 @@
+# Model weights are large binary files distributed from Microsoft OneDrive
+# (see repo/README.md) -- never commit these to the app repo.
+weights/**/*.pkl
+weights/**/*.pth
+
+__pycache__/
+*.pyc

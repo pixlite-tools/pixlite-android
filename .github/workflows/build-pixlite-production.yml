@@ -1,0 +1,101 @@
+name: Build PixLite TEST 27
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/pixlite-scanner-quality-49f1s3
+    paths:
+      - "pixlite_production/**"
+      - ".github/workflows/build-pixlite-production.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+      - name: Flutter dependencies
+        working-directory: pixlite_production
+        run: flutter pub get
+      - name: Apply approved TEST 27 brand vision
+        working-directory: pixlite_production
+        run: |
+          python3 tooling/pixlite_style_v27.py
+          python3 tooling/pixlite_build_fix.py
+          grep -n "PDF & Document Tools • TEST 27" lib/main.dart
+          grep -n "class _PixLiteLogoPainter" lib/main.dart
+          grep -n "AdIds.homeTopBanner" lib/main.dart
+          grep -n "AdIds.homeInlineBanner" lib/main.dart
+          grep -n "AdIds.homeBottomBanner" lib/main.dart
+          test "$(grep -o "bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner)" lib/main.dart | wc -l)" -ge 5
+      - name: Persist verified TEST 27 source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pixlite_production/lib/main.dart
+          if ! git diff --cached --quiet; then git commit -m "Persist PixLite TEST 27 brand source [skip ci]" && git push; fi
+      - name: Create Android shell
+        working-directory: pixlite_production
+        run: flutter create --platforms=android --org com.pixlite .
+      - name: Configure Android
+        working-directory: pixlite_production
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest=Path('android/app/src/main/AndroidManifest.xml'); text=manifest.read_text(); head='<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          if 'android.permission.INTERNET' not in text: text=text.replace(head,head+'\n<uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>')
+          text=text.replace('android:label="pixlite"','android:label="PixLite TEST 27"').replace('android:label="pixlite_production"','android:label="PixLite TEST 27"')
+          admob='<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-8892609279215644~8049200739"/>'
+          if 'com.google.android.gms.ads.APPLICATION_ID' not in text: text=text.replace('<activity',admob+'\n<activity',1)
+          manifest.write_text(text)
+          for path in [Path('android/app/build.gradle.kts'),Path('android/app/build.gradle')]:
+            if path.exists():
+              s=path.read_text().replace('compileSdk = flutter.compileSdkVersion','compileSdk = 36').replace('targetSdk = flutter.targetSdkVersion','targetSdk = 36').replace('minSdk = flutter.minSdkVersion','minSdk = 21').replace('compileSdkVersion flutter.compileSdkVersion','compileSdkVersion 36').replace('targetSdkVersion flutter.targetSdkVersion','targetSdkVersion 36').replace('minSdkVersion flutter.minSdkVersion','minSdkVersion 21'); path.write_text(s)
+          PY
+      - name: Generate orange PixLite launcher icon
+        working-directory: pixlite_production
+        run: |
+          python3 -m pip install pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+          S=1024; im=Image.new('RGBA',(S,S),(5,8,20,255)); d=ImageDraw.Draw(im)
+          orange=(255,133,0,255); orange2=(255,166,51,255)
+          d.rounded_rectangle((100,100,924,924),radius=230,fill=(8,16,31,255),outline=orange,width=42)
+          # Custom P mark: distinctive open lower stem + rounded bowl.
+          d.line((300,730,300,280,650,280),fill=orange,width=105,joint='curve')
+          d.arc((500,280,790,570),-90,90,fill=orange,width=105)
+          d.line((645,570,300,570),fill=orange,width=105)
+          d.line((395,420,640,420),fill=orange2,width=46)
+          src=Path('assets/pixlite_icon.png'); im.save(src)
+          res=Path('android/app/src/main/res')
+          for folder,size in {'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}.items():
+            out=res/folder; out.mkdir(parents=True,exist_ok=True); im.resize((size,size),Image.LANCZOS).save(out/'ic_launcher.png')
+          PY
+      - name: Analyze
+        working-directory: pixlite_production
+        run: flutter analyze lib --no-fatal-infos
+      - name: Build TEST 27 arm64 APK
+        working-directory: pixlite_production
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.27 --build-number=27
+      - name: Prepare artifact
+        run: |
+          mkdir -p release_files
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-TEST-27-arm64.apk
+          sha256sum release_files/PixLite-TEST-27-arm64.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-TEST-27-arm64
+          path: release_files/PixLite-TEST-27-arm64.apk

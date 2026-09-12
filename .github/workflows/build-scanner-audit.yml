@@ -1,0 +1,93 @@
+name: Build PixLite Scanner Audit (diagnostics-only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/pixlite-scanner-quality-49f1s3
+    paths:
+      - "scanner_audit/**"
+      - ".github/workflows/build-scanner-audit.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        working-directory: scanner_audit
+        run: |
+          flutter --version
+          flutter pub get
+
+      - name: Create Android shell
+        working-directory: scanner_audit
+        run: flutter create --platforms=android --org com.pixlite.audit .
+
+      - name: Configure Android manifest (permissions only)
+        working-directory: scanner_audit
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+          head = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          perms = '''
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+          '''
+          if "android.permission.INTERNET" not in text:
+              text = text.replace(head, head + perms)
+          text = text.replace('android:label="scanner_audit"', 'android:label="PixLite Scanner Audit"')
+          text = text.replace('android:label="pixlite_scanner_audit"', 'android:label="PixLite Scanner Audit"')
+          manifest.write_text(text)
+
+          for path in [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]:
+              if not path.exists():
+                  continue
+              s = path.read_text()
+              s = s.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              s = s.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
+              s = s.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
+              s = s.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              s = s.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
+              s = s.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+              path.write_text(s)
+          PY
+
+      - name: Analyze source
+        working-directory: scanner_audit
+        run: flutter analyze --no-fatal-infos || true
+
+      - name: Build audit debug APK
+        working-directory: scanner_audit
+        run: flutter build apk --debug
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release_files
+          cp scanner_audit/build/app/outputs/flutter-apk/app-debug.apk release_files/PixLite-scanner-audit-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixlite-scanner-audit-debug-apk
+          path: release_files/PixLite-scanner-audit-debug.apk
