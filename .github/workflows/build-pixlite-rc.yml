@@ -1,4 +1,4 @@
-name: Build PixLite RC2
+name: Build PixLite RC3
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
     paths:
       - ".github/workflows/build-pixlite-rc.yml"
       - "pixlite_production/tooling/pixlite_release_cleanup.py"
-      - "pixlite_production/tooling/pixlite_adflow_rc2.py"
+      - "pixlite_production/**"
 
 permissions:
   contents: read
@@ -53,6 +53,15 @@ jobs:
           grep -n "PrivacyScreen(lang:lang,tr:tr)" lib/main.dart
           grep -n "showAndWaitIfReady" lib/main.dart
           grep -n "Future<void> generateQr" lib/main.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("lib/main.dart").read_text()
+          assert "static bool _showing=false;" in s
+          assert "if(_showing) return false;" in s
+          assert s.count("await InterstitialAdManager.showAndWaitIfReady();") >= 6
+          assert "Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)" not in s
+          print("Completion ad gate verified in six result flows")
+          PY
           if grep -n "Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)" lib/main.dart; then echo "Old delayed post-share ad flow remains"; exit 1; fi
           if grep -n "TEST " lib/main.dart; then echo "TEST marker found in release source"; exit 1; fi
 
@@ -155,9 +164,9 @@ jobs:
         working-directory: pixlite_production
         run: flutter analyze lib --no-fatal-infos
 
-      - name: Build RC2 arm64 APK
+      - name: Build RC3 arm64 APK
         working-directory: pixlite_production
-        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.0 --build-number=2
+        run: flutter build apk --release --target-platform android-arm64 --build-name=1.0.0 --build-number=3
 
       - name: Verify built APK identity
         working-directory: pixlite_production
@@ -169,11 +178,12 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir -p release_files
-          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-RC2-arm64.apk
-          sha256sum release_files/PixLite-RC2-arm64.apk
-          ls -lh release_files/PixLite-RC2-arm64.apk
+          cp pixlite_production/build/app/outputs/flutter-apk/app-release.apk release_files/PixLite-RC3-arm64.apk
+          sha256sum release_files/PixLite-RC3-arm64.apk
+          ls -lh release_files/PixLite-RC3-arm64.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pixlite-RC2-arm64
-          path: release_files/PixLite-RC2-arm64.apk
+          name: pixlite-RC3-arm64
+          path: release_files/PixLite-RC3-arm64.apk
+          retention-days: 7
