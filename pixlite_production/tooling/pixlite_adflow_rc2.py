@@ -151,6 +151,8 @@ new_qr="""class _QrScreenState extends State<QrScreen>{ final ctrl=TextEditingCo
   Future<void> generateQr() async{ final next=ctrl.text.trim(); if(next.isEmpty||generating)return; setState(()=>generating=true); await InterstitialAdManager.showAndWaitIfReady(); if(!mounted)return; setState((){value=next;generating=false;}); }
   Future<void> shareQr() async{ try{ final boundary=qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?; if(boundary==null)return; final image=await boundary.toImage(pixelRatio:3); final data=await image.toByteData(format:ui.ImageByteFormat.png); if(data==null)return; final dir=await getTemporaryDirectory(); final file=File('${dir.path}/pixlite-qr.png'); final bytes=data.buffer.asUint8List(); await file.writeAsBytes(bytes,flush:true); await OutputStore.saveBytes(bytes,'pixlite-qr.png','PNG'); await Share.shareXFiles([XFile(file.path)]); }catch(_){} }
   @override Widget build(BuildContext context)=>ToolShell(title:widget.tr('qr'), bottomAd:BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolBottomBanner), child:Column(children:[BannerAdBox(label:widget.tr('ad'),adUnitId:AdIds.toolTopBanner), const SizedBox(height:12), CardBox(child:Column(children:[TextField(controller:ctrl,decoration:InputDecoration(labelText:widget.tr('text_link'))), const SizedBox(height:14), FilledButton(onPressed:generating?null:generateQr,child:Text(generating?'...':widget.tr('generate_qr'))),"""
+# The themed source has removed the QR layout's const widget keywords.
+old_qr=old_qr.replace('const ', '')
 if old_qr not in s: raise SystemExit('QR flow anchor not found')
 s=s.replace(old_qr,new_qr,1)
 
