@@ -2,13 +2,6 @@ name: Build PixLite TEST 33
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - pixlite/test29-no-shrink
-    paths:
-      - "pixlite_production/**"
-      - ".github/workflows/build-pixlite-production.yml"
-
 permissions:
   contents: write
 
