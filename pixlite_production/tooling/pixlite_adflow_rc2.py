@@ -81,6 +81,12 @@ if old_manager not in s:
     raise SystemExit('Interstitial manager anchor not found')
 s=s.replace(old_manager,new_manager,1)
 
+# The theme step removes Dart 'const ' tokens globally. Normalize the old
+# delayed-ad call so the exact success-flow replacements below work on both
+# themed CI source and the original checked-in source.
+s=s.replace("Future.delayed(Duration(milliseconds:700),InterstitialAdManager.showIfReady)",
+            "Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)")
+
 # Processing tools: create/save first, show+await interstitial, THEN reveal
 # output/share controls. No delayed post-result ad calls remain.
 repls={
@@ -149,7 +155,8 @@ if old_qr not in s: raise SystemExit('QR flow anchor not found')
 s=s.replace(old_qr,new_qr,1)
 
 # Safety checks: no delayed post-result/post-share interstitials should remain.
-if 'Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)' in s:
+if ('Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)' in s or
+    'Future.delayed(Duration(milliseconds:700),InterstitialAdManager.showIfReady)' in s):
     raise SystemExit('Delayed interstitial remains after patch')
 for required in [
     'static bool _showing=false;',
