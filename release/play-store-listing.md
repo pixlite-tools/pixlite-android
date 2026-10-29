@@ -46,11 +46,11 @@ https://atlasstudioapps.com/privacy-policy.html
 https://atlasstudioapps.com/support.html
 
 ## Package ID
-com.pixlite.pixlite
+com.atlasova.pixlite
 
 ## Version for first production release
 versionName: 1.0.0
-versionCode: 1
+versionCode: 3
 
 ## Release notes — 1.0.0
 Initial release of PixLite with PDF creation, image merging, compression, resizing, document scanning, QR generation, multilingual support, light/dark themes, local file history and privacy controls.
