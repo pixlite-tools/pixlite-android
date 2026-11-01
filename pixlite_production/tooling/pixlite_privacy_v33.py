@@ -51,7 +51,7 @@ privacy=r'''class PrivacyScreen extends StatelessWidget {
 
   Widget row(IconData icon,String title,String sub,{VoidCallback? onTap,Color? color})=>Container(
     margin:EdgeInsets.only(bottom:10),decoration:BoxDecoration(color:kCard,borderRadius:BorderRadius.circular(18),border:Border.all(color:kStroke)),
-    child:ListTile(onTap:onTap,contentPadding:EdgeInsets.symmetric(horizontal:16,vertical:6),leading:Container(width:42,height:42,decoration:BoxDecoration(color:(color??kOrange).withOpacity(.12),borderRadius:BorderRadius.circular(13)),child:Icon(icon,color:color??kOrange)),title:Text(title,style:TextStyle(color:kText,fontSize:13,fontWeight:FontWeight.w900)),subtitle:Padding(padding:EdgeInsets.only(top:4),child:Text(sub,style:TextStyle(color:kSub,fontSize:10.5,height:1.35))),trailing:onTap!=null?Icon(Icons.chevron_right_rounded,color:kSub):null)
+    child:Material(color:Colors.transparent,borderRadius:BorderRadius.circular(18),child:ListTile(onTap:onTap,contentPadding:EdgeInsets.symmetric(horizontal:16,vertical:6),leading:Container(width:42,height:42,decoration:BoxDecoration(color:(color??kOrange).withOpacity(.12),borderRadius:BorderRadius.circular(13)),child:Icon(icon,color:color??kOrange)),title:Text(title,style:TextStyle(color:kText,fontSize:13,fontWeight:FontWeight.w900)),subtitle:Padding(padding:EdgeInsets.only(top:4),child:Text(sub,style:TextStyle(color:kSub,fontSize:10.5,height:1.35))),trailing:onTap!=null?Icon(Icons.chevron_right_rounded,color:kSub):null))
   );
 
   @override Widget build(BuildContext context)=>Scaffold(

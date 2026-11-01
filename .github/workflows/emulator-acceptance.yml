@@ -1,0 +1,252 @@
+name: PixLite isolated emulator acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: [qa/android-emulator-20261101]
+    paths: ['pixlite_production/**', '.github/workflows/emulator-acceptance.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pixlite-emulator-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.9'
+          channel: stable
+          cache: true
+      - name: Flutter dependencies
+        working-directory: pixlite_production
+        run: flutter pub get
+
+      - name: Generate approved PixLite brand asset
+        working-directory: pixlite_production
+        run: |
+          python3 -m pip install pillow
+          python3 tooling/pixlite_icon_v30.py
+
+      - name: Apply stable feature set, corrected monetization flow, and release cleanup
+        working-directory: pixlite_production
+        run: |
+          python3 tooling/pixlite_style_v30.py
+          python3 tooling/pixlite_theme_v31.py
+          python3 tooling/pixlite_privacy_v33.py
+          python3 tooling/pixlite_back_v34.py
+          python3 tooling/pixlite_adflow_rc2.py
+          python3 tooling/pixlite_release_cleanup.py
+          python3 tooling/pixlite_build_fix.py
+          grep -n "PDF & Document Tools" lib/main.dart
+          grep -n "Press back again to exit" lib/main.dart
+          grep -n "PrivacyScreen(lang:lang,tr:tr)" lib/main.dart
+          grep -n "showAndWaitIfReady" lib/main.dart
+          grep -n "Future<void> generateQr" lib/main.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("lib/main.dart").read_text()
+          assert "static bool _showing=false;" in s
+          assert "if(_showing) return false;" in s
+          assert s.count("await InterstitialAdManager.showAndWaitIfReady();") >= 6
+          assert "Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)" not in s
+          print("Completion ad gate verified in six result flows")
+          PY
+          if grep -n "Future.delayed(const Duration(milliseconds:700),InterstitialAdManager.showIfReady)" lib/main.dart; then echo "Old delayed post-share ad flow remains"; exit 1; fi
+          if grep -n "TEST " lib/main.dart; then echo "TEST marker found in release source"; exit 1; fi
+
+      - name: Create Android shell
+        working-directory: pixlite_production
+        run: flutter create --platforms=android --org com.pixlite .
+
+      - name: Configure production Android identity and AdMob
+        working-directory: pixlite_production
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          text=manifest.read_text()
+          head='<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          perms='''
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+          '''
+          if 'android.permission.INTERNET' not in text:
+              text=text.replace(head,head+perms)
+          text=re.sub(r'android:label="[^"]+"','android:label="PixLite"',text,count=1)
+          text=text.replace('android:icon="@mipmap/ic_launcher"','android:icon="@mipmap/pixlite_launcher"')
+          if 'android:roundIcon=' in text:
+              text=re.sub(r'android:roundIcon="[^"]+"','android:roundIcon="@mipmap/pixlite_launcher"',text)
+          admob='''
+                  <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="ca-app-pub-8892609279215644~8049200739"/>
+          '''
+          if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
+              text=text.replace('<activity',admob+'\n        <activity',1)
+          manifest.write_text(text)
+
+          kts=Path('android/app/build.gradle.kts')
+          groovy=Path('android/app/build.gradle')
+          for path in [kts,groovy]:
+              if not path.exists(): continue
+              s=path.read_text()
+              s=s.replace('compileSdk = flutter.compileSdkVersion','compileSdk = 36')
+              s=s.replace('targetSdk = flutter.targetSdkVersion','targetSdk = 36')
+              s=s.replace('minSdk = flutter.minSdkVersion','minSdk = 21')
+              s=s.replace('compileSdkVersion flutter.compileSdkVersion','compileSdkVersion 36')
+              s=s.replace('targetSdkVersion flutter.targetSdkVersion','targetSdkVersion 36')
+              s=s.replace('minSdkVersion flutter.minSdkVersion','minSdkVersion 21')
+              s=re.sub(r'namespace\s*=\s*"[^"]+"','namespace = "com.atlasova.pixlite"',s)
+              s=re.sub(r'applicationId\s*=\s*"[^"]+"','applicationId = "com.atlasova.pixlite"',s)
+              s=re.sub(r'applicationId\s+"[^"]+"','applicationId "com.atlasova.pixlite"',s)
+              path.write_text(s)
+
+          for f in list(Path('android/app/src/main/kotlin').rglob('MainActivity.kt')) + list(Path('android/app/src/main/java').rglob('MainActivity.java')):
+              src=f.read_text()
+              src=re.sub(r'^package\s+[\w.]+', 'package com.atlasova.pixlite', src, count=1, flags=re.M)
+              f.write_text(src)
+
+          if kts.exists():
+              txt=kts.read_text()
+              if 'isMinifyEnabled = false' not in txt:
+                  txt += '''
+
+          android {
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                      isShrinkResources = false
+                      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+                  }
+              }
+          }
+          '''
+                  kts.write_text(txt)
+          Path('android/app/proguard-rules.pro').write_text('''
+          -keep class io.flutter.** { *; }
+          -keep class io.flutter.plugins.** { *; }
+          -keep class com.google.mlkit.** { *; }
+          -keep class com.google.android.gms.** { *; }
+          -dontwarn com.google.mlkit.**
+          -dontwarn com.google.android.gms.**
+          -dontwarn com.google.android.play.core.**
+          ''')
+          PY
+
+      - name: Generate launcher resources
+        working-directory: pixlite_production
+        run: python3 tooling/pixlite_launcher_v30.py
+
+      - name: Verify release identity
+        working-directory: pixlite_production
+        run: |
+          grep -R 'android:label="PixLite"' android/app/src/main/AndroidManifest.xml
+          grep -R 'com.atlasova.pixlite' android/app/build.gradle* android/app/src/main/kotlin android/app/src/main/java 2>/dev/null || true
+          if grep -R "TEST [0-9]" lib android/app/src/main/AndroidManifest.xml; then echo "TEST marker remains"; exit 1; fi
+          grep -n "isMinifyEnabled = false" android/app/build.gradle.kts
+          grep -n "isShrinkResources = false" android/app/build.gradle.kts
+
+
+      - name: Isolated QA source and dependencies
+        working-directory: pixlite_production
+        run: |
+          python3 tooling/pixlite_emulator_qa.py
+          flutter pub get
+          flutter analyze lib integration_test --no-fatal-infos
+          mkdir -p qa-evidence
+          flutter --version > qa-evidence/flutter-version.txt
+          sha256sum lib/main.dart > qa-evidence/generated-source.sha256
+          cp lib/main.dart qa-evidence/generated-main.dart
+          cp pubspec.lock qa-evidence/pubspec.lock
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/emulator" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "ANDROID_AVD_HOME=$RUNNER_TEMP/pixlite-avd" >> "$GITHUB_ENV"
+      - name: Prepare ephemeral API34 emulator
+        run: |
+          if [ -d /usr/share/dotnet ]; then sudo rm -rf /usr/share/dotnet; fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils libpulse0 libnss3 libx11-6 libxcb1 libxkbcommon0
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          sdkmanager 'emulator' 'system-images;android-34;google_apis;x86_64'
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd --force --name pixlite-qa --path "$ANDROID_AVD_HOME/pixlite-qa.avd" --package 'system-images;android-34;google_apis;x86_64'
+          printf '%s\n' 'avd.ini.encoding=UTF-8' "path=$ANDROID_AVD_HOME/pixlite-qa.avd" 'target=android-34' > "$ANDROID_AVD_HOME/pixlite-qa.ini"
+          emulator -avd pixlite-qa -no-window -no-audio -no-boot-anim -no-snapshot -gpu software -memory 2048 > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          for i in $(seq 1 120); do
+            if [ "$(timeout 5 adb -e shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then break; fi
+            sleep 2
+          done
+          test "$(adb -e shell getprop sys.boot_completed | tr -d '\r')" = 1
+          adb -e shell input keyevent 82
+
+      - name: Actual Flutter app integration acceptance
+        working-directory: pixlite_production
+        run: |
+          flutter test integration_test/emulator_acceptance_test.dart -d emulator-5554 --dart-define=PIXLITE_QA=true --reporter expanded
+          PACKAGE="com.atlasova.pixlite.qa.r$GITHUB_RUN_NUMBER"
+          adb -e pull "/sdcard/Android/data/$PACKAGE/files/pixlite-qa" qa-evidence/
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,subprocess
+          p=Path('qa-evidence/pixlite-qa')
+          assert 'PASS:' in (p/'acceptance.txt').read_text()
+          data=json.loads((p/'processing.json').read_text())
+          assert data['history_persisted'] and data['invalid_image_rejected']
+          text=subprocess.check_output(['pdfinfo',str(p/'synthetic-two-page.pdf')],text=True)
+          assert any(line.startswith('Pages:') and line.split()[-1]=='2' for line in text.splitlines())
+          print(text)
+          PY
+      - name: Build normal standalone QA entry point and cold-open offline
+        working-directory: pixlite_production
+        run: |
+          flutter build apk --debug --target lib/main.dart --dart-define=PIXLITE_QA=true --target-platform android-arm64,android-x64
+          mkdir -p qa-apk
+          cp build/app/outputs/flutter-apk/app-debug.apk "qa-apk/PixLite-isolated-QA-$GITHUB_RUN_NUMBER-${GITHUB_SHA:0:7}.apk"
+          PACKAGE="com.atlasova.pixlite.qa.r$GITHUB_RUN_NUMBER"
+          adb -e install -r build/app/outputs/flutter-apk/app-debug.apk
+          adb -e shell cmd connectivity airplane-mode enable
+          adb -e shell am force-stop "$PACKAGE"
+          adb -e shell am start -W -n "$PACKAGE/com.atlasova.pixlite.MainActivity"
+          sleep 4
+          adb -e shell pidof "$PACKAGE"
+          adb -e shell screencap -p /sdcard/pixlite-cold-start.png
+          adb -e pull /sdcard/pixlite-cold-start.png qa-evidence/
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose qa-apk/*.apk
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/aapt" dump badging qa-apk/*.apk > qa-apk/identity.txt
+          grep -F "$PACKAGE" qa-apk/identity.txt
+          sha256sum qa-apk/*.apk > qa-apk/SHA256SUMS
+      - name: Capture Android diagnostics and QA outputs
+        if: always()
+        run: |
+          mkdir -p pixlite_production/qa-evidence
+          PACKAGE="com.atlasova.pixlite.qa.r$GITHUB_RUN_NUMBER"
+          timeout 15 adb -e pull "/sdcard/Android/data/$PACKAGE/files/pixlite-qa" pixlite_production/qa-evidence/ || true
+          timeout 10 adb -e logcat -d -t 1000 > pixlite_production/qa-evidence/logcat.txt || true
+          cp "$RUNNER_TEMP/emulator.log" pixlite_production/qa-evidence/ 2>/dev/null || true
+          find pixlite_production/build/app/outputs -name '*.apk' -exec sha256sum {} \; > pixlite_production/qa-evidence/APK-SHA256SUMS || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: pixlite-isolated-emulator-qa
+          path: |
+            pixlite_production/qa-evidence/
+            pixlite_production/qa-apk/
+          retention-days: 7
+      - name: Stop ephemeral emulator
+        if: always()
+        run: adb -e emu kill || true

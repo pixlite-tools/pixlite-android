@@ -109,6 +109,8 @@ class _PixLiteAppState extends State<PixLiteApp> {
     return Directionality(
       textDirection: lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
       child: MaterialApp(
+        // MaterialApp installs its own Directionality; override it around routes.
+        builder:(context,child)=>Directionality(textDirection:lang=='ar'?TextDirection.rtl:TextDirection.ltr,child:child??const SizedBox.shrink()),
         title:'PixLite', debugShowCheckedModeBanner:false,
         theme: ThemeData(
           useMaterial3:true, scaffoldBackgroundColor:kBg, colorScheme: ColorScheme.fromSeed(seedColor:kViolet, brightness:Brightness.dark),
@@ -386,7 +388,7 @@ class SettingsScreen extends StatelessWidget{
     BannerAdBox(label:tr('ad'),adUnitId:AdIds.toolBottomBanner),
   ]);
 }
-class _SettingTile extends StatelessWidget{final IconData icon;final String title,value;final VoidCallback? onTap;const _SettingTile({required this.icon,required this.title,required this.value,this.onTap});@override Widget build(BuildContext context)=>Container(margin:const EdgeInsets.only(bottom:9),decoration:BoxDecoration(color:kCard,borderRadius:BorderRadius.circular(16),border:Border.all(color:kStroke)),child:ListTile(onTap:onTap,leading:Icon(icon,color:kSub),title:Text(title,style:const TextStyle(color:kText,fontSize:12.5,fontWeight:FontWeight.w800)),trailing:Row(mainAxisSize:MainAxisSize.min,children:[if(value.isNotEmpty)Text(value,style:const TextStyle(color:kSub,fontSize:11)),const SizedBox(width:4),const Icon(Icons.chevron_right_rounded,color:kSub,size:19)])));
+class _SettingTile extends StatelessWidget{final IconData icon;final String title,value;final VoidCallback? onTap;const _SettingTile({required this.icon,required this.title,required this.value,this.onTap});@override Widget build(BuildContext context)=>Container(margin:const EdgeInsets.only(bottom:9),decoration:BoxDecoration(color:kCard,borderRadius:BorderRadius.circular(16),border:Border.all(color:kStroke)),child:Material(color:Colors.transparent,borderRadius:BorderRadius.circular(16),child:ListTile(onTap:onTap,leading:Icon(icon,color:kSub),title:Text(title,style:const TextStyle(color:kText,fontSize:12.5,fontWeight:FontWeight.w800)),trailing:Row(mainAxisSize:MainAxisSize.min,children:[if(value.isNotEmpty)Text(value,style:const TextStyle(color:kSub,fontSize:11)),const SizedBox(width:4),const Icon(Icons.chevron_right_rounded,color:kSub,size:19)]))));
 }
 
 class MiniPill extends StatelessWidget{ final String text; final Color color; const MiniPill(this.text,this.color,{super.key}); @override Widget build(BuildContext context)=>Container(padding: const EdgeInsets.symmetric(horizontal:11,vertical:7), decoration:BoxDecoration(color:color.withOpacity(.12),borderRadius:BorderRadius.circular(99),border:Border.all(color:color.withOpacity(.35))), child:Text(text,style:TextStyle(color:color,fontSize:10,fontWeight:FontWeight.w900))); }
