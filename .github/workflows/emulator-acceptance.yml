@@ -210,6 +210,26 @@ jobs:
           assert any(line.startswith('Pages:') and line.split()[-1]=='2' for line in text.splitlines())
           print(text)
           PY
+      - name: Build normal standalone QA entry point and cold-open offline
+        working-directory: pixlite_production
+        run: |
+          flutter build apk --debug --target lib/main.dart --dart-define=PIXLITE_QA=true --target-platform android-arm64,android-x64
+          mkdir -p qa-apk
+          cp build/app/outputs/flutter-apk/app-debug.apk "qa-apk/PixLite-isolated-QA-$GITHUB_RUN_NUMBER-${GITHUB_SHA:0:7}.apk"
+          PACKAGE="com.atlasova.pixlite.qa.r$GITHUB_RUN_NUMBER"
+          adb -e install -r build/app/outputs/flutter-apk/app-debug.apk
+          adb -e shell cmd connectivity airplane-mode enable
+          adb -e shell am force-stop "$PACKAGE"
+          adb -e shell am start -W -n "$PACKAGE/com.atlasova.pixlite.MainActivity"
+          sleep 4
+          adb -e shell pidof "$PACKAGE"
+          adb -e shell screencap -p /sdcard/pixlite-cold-start.png
+          adb -e pull /sdcard/pixlite-cold-start.png qa-evidence/
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose qa-apk/*.apk
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/aapt" dump badging qa-apk/*.apk > qa-apk/identity.txt
+          grep -F "$PACKAGE" qa-apk/identity.txt
+          sha256sum qa-apk/*.apk > qa-apk/SHA256SUMS
       - name: Capture Android diagnostics and QA outputs
         if: always()
         run: |
@@ -225,7 +245,7 @@ jobs:
           name: pixlite-isolated-emulator-qa
           path: |
             pixlite_production/qa-evidence/
-            pixlite_production/build/app/outputs/flutter-apk/*.apk
+            pixlite_production/qa-apk/
           retention-days: 7
       - name: Stop ephemeral emulator
         if: always()
