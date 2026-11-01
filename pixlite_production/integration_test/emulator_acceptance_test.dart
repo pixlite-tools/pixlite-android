@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:pixlite/main.dart' as app;
 
 void main() {
@@ -29,6 +30,13 @@ void main() {
     expect(result['resized_width'],320);
     await tester.pumpAndSettle();
     await tester.tap(find.byType(NavigationDestination).at(2));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Privacy'));
+    await tester.pumpAndSettle();
+    expect(find.byType(app.PrivacyScreen),findsOneWidget);
+    expect(tester.takeException(),isNull);
+    await shot('privacy-en');
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Language'));
     await tester.pumpAndSettle();
@@ -69,7 +77,9 @@ void main() {
     expect((await SharedPreferences.getInstance()).getString('lang'),'en');
     expect((await SharedPreferences.getInstance()).getBool('darkTheme'),isFalse);
     expect((await app.OutputStore.list()).any((row)=>row.kind=='PDF'),isTrue);
-    await tester.ensureVisible(find.text('QR Code').first);
+    await Scrollable.ensureVisible(tester.element(find.text('QR Code').first),alignment:0.5);
+    await tester.pumpAndSettle();
+    expect(find.text('QR Code').first.hitTestable(),findsOneWidget);
     await tester.tap(find.text('QR Code').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first,'https://example.com/fictional-qa');
@@ -79,6 +89,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Save / Share'),findsOneWidget);
     expect(tester.takeException(),isNull);
+    expect(find.byType(QrImageView),findsOneWidget);
+    await Scrollable.ensureVisible(tester.element(find.byType(QrImageView)),alignment:0.5);
+    await tester.pumpAndSettle();
     await shot('qr-generated');
     await File(output.path+'/acceptance.txt').writeAsString(
       'PASS: actual Flutter app, four language views, RTL, light theme, preferences/file history reopen, real image/PDF processing, QR generation. Synthetic data. Native picker/scanner/receiver sharing and physical acceptance remain pending.');
